@@ -2,6 +2,8 @@ import { Link } from 'react-router-dom';
 import { useApi } from '../hooks/useApi';
 import api from '../services/api';
 
+const cardStyle = { backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' };
+
 export default function Notifications() {
   const { data, loading, setData } = useApi('/notifications');
 
@@ -21,42 +23,72 @@ export default function Notifications() {
     });
   };
 
-  if (loading) return <p className="text-center text-gray-500 py-8">Memuat...</p>;
+  if (loading) {
+    return (
+      <div className="flex justify-center py-16">
+        <div className="w-8 h-8 border-3 border-orange-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   const notifications = data?.data || [];
+  const unreadCount = notifications.filter((n) => !n.read_at).length;
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-lg font-semibold text-gray-800">Notifikasi</h1>
-        {notifications.length > 0 && (
-          <button onClick={markAllRead} className="text-xs text-orange-500 hover:underline">
+      <div className="flex items-center justify-between mb-5">
+        <div>
+          <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>Notifikasi</h1>
+          {unreadCount > 0 && (
+            <p className="text-sm mt-0.5" style={{ color: 'var(--text-muted)' }}>{unreadCount} belum dibaca</p>
+          )}
+        </div>
+        {unreadCount > 0 && (
+          <button onClick={markAllRead} className="text-sm text-orange-500 hover:text-orange-600 font-medium">
             Tandai semua dibaca
           </button>
         )}
       </div>
+
       {notifications.length === 0 ? (
-        <p className="text-gray-500 text-sm">Belum ada notifikasi.</p>
+        <div className="text-center py-16 rounded-xl" style={cardStyle}>
+          <p className="text-4xl mb-3">🔔</p>
+          <p className="font-medium" style={{ color: 'var(--text-primary)' }}>Belum ada notifikasi</p>
+          <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>Notifikasi baru akan muncul di sini.</p>
+        </div>
       ) : (
         <div className="space-y-2">
           {notifications.map((n) => (
             <div
               key={n.id}
-              className={`bg-white border rounded-lg p-3 ${
-                n.read_at ? 'border-gray-200' : 'border-orange-300 bg-orange-50'
-              }`}
+              className="rounded-xl p-4 transition-all"
+              style={{
+                backgroundColor: n.read_at ? 'var(--bg-card)' : undefined,
+                background: n.read_at ? undefined : 'linear-gradient(135deg, rgba(255,107,53,0.05), rgba(247,147,30,0.05))',
+                border: `1px solid ${n.read_at ? 'var(--border-color)' : '#f7931e40'}`,
+              }}
             >
-              <div className="flex items-center justify-between">
-                <Link to={`/post/${n.data.post_id}`} className="text-sm text-gray-700 hover:text-orange-500">
-                  <strong>u/{n.data.commenter}</strong> mengomentari post "{n.data.post_title}"
-                </Link>
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start gap-3 flex-1 min-w-0">
+                  <div
+                    className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0 mt-0.5"
+                    style={{ background: 'linear-gradient(135deg, #ff6b35, #f7931e)' }}
+                  >
+                    {n.data.commenter?.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <Link to={`/post/${n.data.post_id}`} className="text-sm hover:text-orange-500 transition-colors" style={{ color: 'var(--text-primary)' }}>
+                      <strong>u/{n.data.commenter}</strong> <span style={{ color: 'var(--text-muted)' }}>mengomentari</span> "{n.data.post_title}"
+                    </Link>
+                    <p className="text-xs mt-1 line-clamp-2" style={{ color: 'var(--text-muted)' }}>{n.data.body}</p>
+                  </div>
+                </div>
                 {!n.read_at && (
-                  <button onClick={() => markAsRead(n.id)} className="text-xs text-gray-400 hover:text-gray-600">
-                    Tandai dibaca
+                  <button onClick={() => markAsRead(n.id)} className="text-xs shrink-0 px-2.5 py-1 rounded-full transition-colors" style={{ color: 'var(--text-muted)', border: '1px solid var(--border-color)' }}>
+                    Dibaca
                   </button>
                 )}
               </div>
-              <p className="text-xs text-gray-500 mt-1">{n.data.body}</p>
             </div>
           ))}
         </div>

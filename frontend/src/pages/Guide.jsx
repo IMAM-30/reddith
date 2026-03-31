@@ -1,32 +1,33 @@
+const cardStyle = { backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' };
+
+const sections = [
+  { icon: '👤', title: 'Membuat Akun', body: 'Klik tombol "Register" di pojok kanan atas, isi nama, username, NIM, email, dan password. Setelah register, kamu otomatis login.' },
+  { icon: '🏘️', title: 'Membuat Community', body: 'Setelah login, klik "Start Community" di sidebar kiri atau gunakan tombol di pojok kiri bawah. Isi nama dan deskripsi community.' },
+  { icon: '✏️', title: 'Membuat Post', body: 'Klik "Create Post" di pojok kiri bawah, pilih community tujuan, isi judul dan isi post. Kamu juga bisa menambahkan gambar.' },
+  { icon: '⬆️', title: 'Voting', body: 'Gunakan tombol ▲ (upvote) dan ▼ (downvote) pada post. Voting mempengaruhi karma pengguna.' },
+  { icon: '💬', title: 'Komentar', body: 'Buka detail post dan tulis komentar di form yang tersedia. Kamu akan mendapat notifikasi jika ada yang membalas.' },
+  { icon: '📩', title: 'Pesan Langsung', body: 'Klik "Pesan" di navbar untuk mengirim dan membaca pesan pribadi ke pengguna lain.' },
+];
+
 export default function Guide() {
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-6">
-      <h1 className="text-xl font-bold text-gray-800 mb-4">Panduan Pengguna</h1>
-      <div className="space-y-4 text-sm text-gray-600">
-        <section>
-          <h2 className="font-semibold text-gray-700 mb-1">Membuat Akun</h2>
-          <p>Klik tombol "Register" di pojok kanan atas, isi nama, username, email, dan password. Setelah register, kamu otomatis login.</p>
-        </section>
-        <section>
-          <h2 className="font-semibold text-gray-700 mb-1">Membuat Community</h2>
-          <p>Setelah login, klik "+ Buat Community" di sidebar. Isi nama dan deskripsi community.</p>
-        </section>
-        <section>
-          <h2 className="font-semibold text-gray-700 mb-1">Membuat Post</h2>
-          <p>Klik "+ Buat Post" di sidebar, pilih community tujuan, isi judul dan isi post. Kamu juga bisa menambahkan gambar.</p>
-        </section>
-        <section>
-          <h2 className="font-semibold text-gray-700 mb-1">Voting</h2>
-          <p>Gunakan tombol ▲ (upvote) dan ▼ (downvote) pada post atau komentar. Voting mempengaruhi karma pengguna.</p>
-        </section>
-        <section>
-          <h2 className="font-semibold text-gray-700 mb-1">Komentar</h2>
-          <p>Buka detail post dan tulis komentar di form yang tersedia. Kamu akan mendapat notifikasi jika ada yang membalas.</p>
-        </section>
-        <section>
-          <h2 className="font-semibold text-gray-700 mb-1">Pesan Langsung</h2>
-          <p>Klik "Pesan" di navbar untuk mengirim dan membaca pesan pribadi ke pengguna lain.</p>
-        </section>
+    <div>
+      <div className="rounded-xl p-6 mb-4" style={cardStyle}>
+        <h1 className="text-xl font-bold mb-1" style={{ color: 'var(--text-primary)' }}>Panduan Pengguna</h1>
+        <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Pelajari cara menggunakan Reddith dengan mudah.</p>
+      </div>
+      <div className="space-y-3">
+        {sections.map((s, i) => (
+          <div key={i} className="rounded-xl p-5" style={cardStyle}>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-9 h-9 rounded-full flex items-center justify-center text-base shrink-0" style={{ background: 'linear-gradient(135deg, #ff6b35, #f7931e)' }}>
+                {s.icon}
+              </div>
+              <h2 className="font-semibold" style={{ color: 'var(--text-primary)' }}>{s.title}</h2>
+            </div>
+            <p className="text-sm leading-relaxed ml-12" style={{ color: 'var(--text-secondary)' }}>{s.body}</p>
+          </div>
+        ))}
       </div>
     </div>
   );

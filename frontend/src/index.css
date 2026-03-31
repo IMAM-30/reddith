@@ -1,1 +1,64 @@
 @import "tailwindcss";
+
+/* Dark mode overrides */
+:root {
+  --bg-primary: #f9fafb;
+  --bg-card: #ffffff;
+  --bg-input: #f3f4f6;
+  --border-color: #e5e7eb;
+  --border-hover: #d1d5db;
+  --text-primary: #1f2937;
+  --text-secondary: #4b5563;
+  --text-muted: #6b7280;
+  --text-faint: #9ca3af;
+}
+
+.dark {
+  --bg-primary: #1a1a1b;
+  --bg-card: #272729;
+  --bg-input: #3a3a3c;
+  --border-color: #3a3a3c;
+  --border-hover: #4a4a4c;
+  --text-primary: #d7dadc;
+  --text-secondary: #b8bbbe;
+  --text-muted: #818384;
+  --text-faint: #6a6c6e;
+}
+
+/* Apply dark mode to base elements */
+.dark body {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+/* Card overrides */
+.dark .card {
+  background-color: var(--bg-card);
+  border-color: var(--border-color);
+}
+
+.dark .card:hover {
+  border-color: var(--border-hover);
+}
+
+/* Input overrides */
+.dark input,
+.dark textarea,
+.dark select {
+  background-color: var(--bg-input);
+  border-color: var(--border-color);
+  color: var(--text-primary);
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: var(--text-muted);
+}
+
+/* Spinner animation */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.animate-spin {
+  animation: spin 1s linear infinite;
+}

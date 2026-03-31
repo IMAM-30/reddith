@@ -13,7 +13,6 @@ export default function LeftSidebar() {
 
   return (
     <>
-      {/* Sidebar */}
       <aside className="w-52 shrink-0 hidden lg:block">
         <nav className="sticky top-18 space-y-1">
           {navItems.map((item) => {
@@ -23,10 +22,9 @@ export default function LeftSidebar() {
                 key={item.to}
                 to={item.to}
                 className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  isActive
-                    ? 'bg-orange-50 text-orange-600'
-                    : 'text-gray-600 hover:bg-gray-100 hover:text-gray-800'
+                  isActive ? 'bg-orange-50 text-orange-600' : ''
                 }`}
+                style={!isActive ? { color: 'var(--text-secondary)' } : undefined}
               >
                 <span className="text-base">{item.icon}</span>
                 {item.label}
@@ -36,14 +34,13 @@ export default function LeftSidebar() {
 
           {user && (
             <>
-              <div className="border-t border-gray-200 my-3" />
+              <div className="my-3" style={{ borderTop: '1px solid var(--border-color)' }} />
               <Link
                 to="/create-community"
                 className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  pathname === '/create-community'
-                    ? 'bg-orange-50 text-orange-600'
-                    : 'text-gray-600 hover:bg-gray-100 hover:text-gray-800'
+                  pathname === '/create-community' ? 'bg-orange-50 text-orange-600' : ''
                 }`}
+                style={pathname !== '/create-community' ? { color: 'var(--text-secondary)' } : undefined}
               >
                 <span className="text-base">➕</span>
                 Start Community
@@ -53,7 +50,6 @@ export default function LeftSidebar() {
         </nav>
       </aside>
 
-      {/* Fixed Bottom-Left Buttons */}
       {user && (
         <div className="fixed bottom-6 left-6 z-40 hidden lg:flex flex-col gap-2">
           <Link
@@ -64,7 +60,8 @@ export default function LeftSidebar() {
           </Link>
           <Link
             to="/create-community"
-            className="flex items-center gap-2 px-4 py-2 bg-white text-gray-700 text-sm font-medium rounded-full shadow-lg border border-gray-200 hover:border-gray-300 transition-colors"
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-full shadow-lg transition-colors"
+            style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)', border: '1px solid var(--border-color)' }}
           >
             <span>➕</span> Start Community
           </Link>

@@ -58,6 +58,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::patch('/notifications/read-all', [NotificationController::class, 'markAllAsRead']);
     Route::patch('/notifications/{id}/read', [NotificationController::class, 'markAsRead']);
 
+    // Profile
+    Route::post('/update-avatar', [UserController::class, 'updateAvatar']);
+    Route::put('/update-profile', [UserController::class, 'updateProfile']);
+
     // Direct Messages
     Route::get('/messages/inbox', [MessageController::class, 'inbox']);
     Route::get('/messages/sent', [MessageController::class, 'sent']);

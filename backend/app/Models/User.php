@@ -62,6 +62,13 @@ class User extends Authenticatable
         return $this->hasMany(DirectMessage::class, 'receiver_id');
     }
 
+    protected $appends = ['avatar_url'];
+
+    public function getAvatarUrlAttribute(): ?string
+    {
+        return $this->avatar ? asset('storage/' . $this->avatar) : null;
+    }
+
     public function getKarmaAttribute(): int
     {
         $postKarma = Vote::where('voteable_type', Post::class)
