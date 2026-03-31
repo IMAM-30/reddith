@@ -26,6 +26,7 @@ Route::get('/posts/{post}/comments', [CommentController::class, 'index']);
 
 Route::get('/search', [SearchController::class, 'search']);
 
+Route::get('/profile/{id}', [UserController::class, 'profile']);
 Route::get('/users/{user:username}', [UserController::class, 'show']);
 Route::get('/users/{user:username}/posts', [UserController::class, 'posts']);
 

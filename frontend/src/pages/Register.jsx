@@ -6,7 +6,7 @@ export default function Register() {
   const { register } = useAuth();
   const navigate = useNavigate();
   const [form, setForm] = useState({
-    name: '', username: '', email: '', password: '', password_confirmation: '',
+    name: '', username: '', nim: '', email: '', password: '', password_confirmation: '',
   });
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
@@ -25,7 +25,11 @@ export default function Register() {
     }
   };
 
-  const set = (key) => (e) => setForm({ ...form, [key]: e.target.value });
+  const set = (key) => (e) => {
+    let value = e.target.value;
+    if (key === 'nim') value = value.replace(/\D/g, '');
+    setForm({ ...form, [key]: value });
+  };
 
   return (
     <div className="max-w-sm mx-auto mt-12">
@@ -35,16 +39,18 @@ export default function Register() {
         {[
           { key: 'name', type: 'text', placeholder: 'Nama Lengkap' },
           { key: 'username', type: 'text', placeholder: 'Username' },
+          { key: 'nim', type: 'text', placeholder: 'NIM (9 digit)', maxLength: 9 },
           { key: 'email', type: 'email', placeholder: 'Email' },
           { key: 'password', type: 'password', placeholder: 'Password (min 8 karakter)' },
           { key: 'password_confirmation', type: 'password', placeholder: 'Konfirmasi Password' },
-        ].map(({ key, type, placeholder }) => (
+        ].map(({ key, type, placeholder, maxLength }) => (
           <div key={key}>
             <input
               type={type}
               placeholder={placeholder}
               value={form[key]}
               onChange={set(key)}
+              maxLength={maxLength}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-orange-400"
               required
             />

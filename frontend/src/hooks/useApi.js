@@ -7,6 +7,11 @@ export function useApi(url, deps = []) {
   const [error, setError] = useState(null);
 
   useEffect(() => {
+    if (!url) {
+      setLoading(false);
+      return;
+    }
+
     let cancelled = false;
     setLoading(true);
 

@@ -20,6 +20,18 @@ class UserController extends Controller
         ]);
     }
 
+    public function profile(int $id): JsonResponse
+    {
+        $user = User::findOrFail($id);
+
+        return response()->json([
+            'username' => $user->username,
+            'nim' => $user->nim,
+            'karma' => $user->karma ?? 0,
+            'created_at' => $user->created_at,
+        ]);
+    }
+
     public function posts(User $user): JsonResponse
     {
         $posts = $user->posts()

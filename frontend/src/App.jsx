@@ -13,9 +13,11 @@ import CreateCommunity from './pages/CreateCommunity';
 import CreatePost from './pages/CreatePost';
 import PostDetail from './pages/PostDetail';
 import UserProfile from './pages/UserProfile';
+import ProfilePage from './pages/ProfilePage';
 import Search from './pages/Search';
 import Notifications from './pages/Notifications';
 import Messages from './pages/Messages';
+import Popular from './pages/Popular';
 import Rules from './pages/Rules';
 import Guide from './pages/Guide';
 
@@ -27,9 +29,11 @@ export default function App() {
           <Route element={<AppLayout />}>
             {/* Public */}
             <Route path="/" element={<Home />} />
+            <Route path="/popular" element={<Popular />} />
             <Route path="/r/:slug" element={<CommunityDetail />} />
             <Route path="/post/:id" element={<PostDetail />} />
             <Route path="/user/:username" element={<UserProfile />} />
+            <Route path="/profile/:id" element={<ProfilePage />} />
             <Route path="/communities" element={<Communities />} />
             <Route path="/search" element={<Search />} />
             <Route path="/rules" element={<Rules />} />
