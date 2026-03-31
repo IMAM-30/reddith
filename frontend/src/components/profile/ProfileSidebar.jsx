@@ -1,7 +1,6 @@
 import { useState } from 'react';
-import ProfileAvatar from './ProfileAvatar';
 
-export default function ProfileSidebar({ profile, isOwner = false, onAvatarChange }) {
+export default function ProfileSidebar({ profile, isOwner = false }) {
   const [copied, setCopied] = useState(false);
 
   const redditAge = () => {
@@ -24,107 +23,80 @@ export default function ProfileSidebar({ profile, isOwner = false, onAvatarChang
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const joinDate = new Date(profile.created_at).toLocaleDateString('id-ID', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  });
-
   const cardStyle = { backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' };
 
   return (
     <div className="rounded-xl overflow-hidden" style={cardStyle}>
       {/* Banner */}
-      <div className="h-24 relative" style={{ background: 'linear-gradient(135deg, #ff6b35 0%, #f7931e 50%, #ffad42 100%)' }}>
-        <div className="absolute inset-0" style={{ background: 'url("data:image/svg+xml,%3Csvg width=\'40\' height=\'40\' viewBox=\'0 0 40 40\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cpath d=\'M20 20l20-20H0z\' fill=\'rgba(255,255,255,0.05)\'/%3E%3C/svg%3E") repeat' }} />
-      </div>
+      <div className="h-20 relative" style={{ background: 'linear-gradient(135deg, #ff6b35 0%, #f7931e 50%, #ffad42 100%)' }} />
 
-      {/* Avatar overlapping banner */}
-      <div className="px-4 -mt-10 relative z-10">
-        <ProfileAvatar
-          avatarUrl={profile.avatar || profile.avatar_url}
-          username={profile.username}
-          size="xl"
-          editable={isOwner}
-          onAvatarChange={onAvatarChange}
-        />
-      </div>
-
-      {/* Username & info */}
-      <div className="px-4 mt-2">
+      {/* Username */}
+      <div className="px-4 pt-3">
         <h3 className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>
-          u/{profile.username}
+          {profile.username}
         </h3>
-        {profile.name && (
-          <p className="text-sm mt-0.5" style={{ color: 'var(--text-muted)' }}>{profile.name}</p>
-        )}
-        <p className="text-xs mt-1" style={{ color: 'var(--text-faint)' }}>
-          Bergabung {joinDate}
-        </p>
       </div>
 
-      {/* Share button */}
+      {/* Share Button */}
       <div className="px-4 mt-3">
         <button
           onClick={handleShare}
-          className="w-full py-2 text-sm font-medium rounded-full transition-all flex items-center justify-center gap-2"
-          style={{ border: '1px solid var(--border-color)', color: 'var(--text-secondary)' }}
+          className="flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium rounded-full transition-colors"
+          style={{ backgroundColor: 'var(--bg-input)', color: 'var(--text-secondary)' }}
         >
-          {copied ? (
-            <>
-              <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-              Link disalin!
-            </>
-          ) : (
-            <>
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-              </svg>
-              Share Profile
-            </>
-          )}
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+          </svg>
+          {copied ? 'Copied!' : 'Share'}
         </button>
       </div>
 
-      {/* Stats */}
-      <div className="px-4 mt-4">
-        <div className="grid grid-cols-3 gap-3">
-          <div className="text-center py-2 rounded-lg" style={{ backgroundColor: 'var(--bg-input)' }}>
-            <p className="text-base font-bold text-orange-500">{profile.karma ?? 0}</p>
-            <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>Karma</p>
-          </div>
-          <div className="text-center py-2 rounded-lg" style={{ backgroundColor: 'var(--bg-input)' }}>
-            <p className="text-base font-bold" style={{ color: 'var(--text-primary)' }}>{redditAge()}</p>
-            <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>Usia</p>
-          </div>
-          <div className="text-center py-2 rounded-lg" style={{ backgroundColor: 'var(--bg-input)' }}>
-            <p className="text-base font-bold" style={{ color: 'var(--text-primary)' }}>General</p>
-            <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>Aktif di</p>
-          </div>
+      {/* Stats Grid */}
+      <div className="px-4 mt-4 grid grid-cols-2 gap-x-4 gap-y-3">
+        <div>
+          <p className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>{profile.karma ?? 0}</p>
+          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Karma</p>
+        </div>
+        <div>
+          <p className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>0</p>
+          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Contributions</p>
+        </div>
+        <div>
+          <p className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>{redditAge()}</p>
+          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Reddit Age</p>
+        </div>
+        <div>
+          <p className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>0</p>
+          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Active in</p>
         </div>
       </div>
 
-      {/* NIM badge */}
-      {profile.nim && (
-        <div className="px-4 mt-3">
-          <div className="flex items-center gap-2 py-2 px-3 rounded-lg text-sm" style={{ backgroundColor: 'var(--bg-input)' }}>
-            <svg className="w-4 h-4" style={{ color: 'var(--text-muted)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0" />
-            </svg>
-            <span style={{ color: 'var(--text-muted)' }}>NIM:</span>
-            <span className="font-mono font-medium" style={{ color: 'var(--text-primary)' }}>{profile.nim}</span>
-          </div>
-        </div>
-      )}
-
-      {/* Update Profile button */}
+      {/* Settings */}
       {isOwner && (
-        <div className="px-4 py-4 mt-3" style={{ borderTop: '1px solid var(--border-color)' }}>
-          <button className="w-full py-2 text-sm font-medium rounded-full bg-orange-500 text-white hover:bg-orange-600 transition-colors">
-            Update Profile
-          </button>
+        <div className="px-4 mt-5 pb-4">
+          <p className="text-xs font-semibold tracking-wide uppercase mb-3" style={{ color: 'var(--text-muted)' }}>Settings</p>
+          <div className="space-y-3">
+            {[
+              { icon: '👤', title: 'Profile', desc: 'Customize your profile' },
+              { icon: '🖼️', title: 'Avatar', desc: 'Style your avatar' },
+            ].map((item) => (
+              <div key={item.title} className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <span className="text-base">{item.icon}</span>
+                  <div>
+                    <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{item.title}</p>
+                    <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{item.desc}</p>
+                  </div>
+                </div>
+                <button
+                  className="text-xs font-medium px-3 py-1 rounded-full"
+                  style={{ backgroundColor: 'var(--bg-input)', color: 'var(--text-primary)' }}
+                >
+                  Update
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

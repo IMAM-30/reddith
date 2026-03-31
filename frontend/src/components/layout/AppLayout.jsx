@@ -1,9 +1,12 @@
-import { Outlet } from 'react-router-dom';
+import { Outlet, useLocation } from 'react-router-dom';
 import Navbar from './Navbar';
 import Sidebar from './Sidebar';
 import LeftSidebar from './LeftSidebar';
 
 export default function AppLayout() {
+  const { pathname } = useLocation();
+  const isProfilePage = pathname.startsWith('/profile/');
+
   return (
     <div className="min-h-screen" style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
       <Navbar />
@@ -12,7 +15,7 @@ export default function AppLayout() {
         <main className="flex-1 min-w-0">
           <Outlet />
         </main>
-        <Sidebar />
+        {!isProfilePage && <Sidebar />}
       </div>
     </div>
   );
