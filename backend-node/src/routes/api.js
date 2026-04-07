@@ -1,0 +1,80 @@
+const express = require('express');
+const router = express.Router();
+
+const { authRequired } = require('../middleware/auth');
+const { createUploader } = require('../middleware/upload');
+
+const auth = require('../controllers/authController');
+const community = require('../controllers/communityController');
+const post = require('../controllers/postController');
+const comment = require('../controllers/commentController');
+const vote = require('../controllers/voteController');
+const message = require('../controllers/messageController');
+const notification = require('../controllers/notificationController');
+const user = require('../controllers/userController');
+const search = require('../controllers/searchController');
+
+const uploadCommunityIcon = createUploader('communities').single('icon');
+const uploadPostImage = createUploader('posts').single('image');
+const uploadAvatar = createUploader('avatars').single('avatar');
+
+// ── Public ──────────────────────────────────────────────
+router.post('/register', auth.register);
+router.post('/login', auth.login);
+
+router.get('/posts', post.index);
+router.get('/posts/:id', post.show);
+
+router.get('/communities', community.index);
+router.get('/communities/:slug', community.show);
+router.get('/communities/:slug/posts', post.byCommunity);
+
+router.get('/posts/:id/comments', comment.index);
+
+router.get('/search', search.search);
+
+router.get('/profile/:id', user.profile);
+router.get('/users/:username', user.show);
+router.get('/users/:username/posts', user.userPosts);
+
+// ── Protected ───────────────────────────────────────────
+router.post('/logout', authRequired, auth.logout);
+router.get('/me', authRequired, auth.me);
+
+// Communities
+router.post('/communities', authRequired, uploadCommunityIcon, community.store);
+router.post('/communities/:slug/join', authRequired, community.join);
+router.delete('/communities/:slug/leave', authRequired, community.leave);
+
+// Posts
+router.post('/posts', authRequired, uploadPostImage, post.store);
+router.delete('/posts/:id', authRequired, post.destroy);
+
+// Comments
+router.post('/posts/:id/comments', authRequired, comment.store);
+router.delete('/posts/:id/comments/:commentId', authRequired, comment.destroy);
+
+// Votes
+router.post('/posts/:id/vote', authRequired, vote.votePost);
+router.post('/comments/:id/vote', authRequired, vote.voteComment);
+
+// Notifications
+router.get('/notifications', authRequired, notification.index);
+router.patch('/notifications/read-all', authRequired, notification.markAllAsRead);
+router.patch('/notifications/:id/read', authRequired, notification.markAsRead);
+
+// Profile
+router.post('/update-avatar', authRequired, uploadAvatar, user.updateAvatar);
+router.put('/update-profile', authRequired, user.updateProfile);
+
+// Direct Messages
+router.get('/messages/threads', authRequired, message.threads);
+router.get('/messages/inbox', authRequired, message.inbox);
+router.get('/messages/sent', authRequired, message.sent);
+router.get('/messages/conversation/:userId', authRequired, message.conversation);
+router.post('/messages', authRequired, message.store);
+router.patch('/messages/:id/read', authRequired, message.read);
+router.delete('/messages/thread/:userId', authRequired, message.destroyThread);
+router.delete('/messages/:id', authRequired, message.destroyMessage);
+
+module.exports = router;
