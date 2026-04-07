@@ -2,18 +2,8 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 
-// Simpan file ke folder Laravel storage supaya kompatibel dengan data lama
-// dan URL /storage/... tetap bekerja seperti Laravel.
-const STORAGE_ROOT = path.join(
-  __dirname,
-  '..',
-  '..',
-  '..',
-  'backend',
-  'storage',
-  'app',
-  'public'
-);
+// Simpan file ke backend-node/storage. URL diakses lewat /storage/...
+const STORAGE_ROOT = path.join(__dirname, '..', '..', 'storage');
 
 function createUploader(subfolder) {
   const dest = path.join(STORAGE_ROOT, subfolder);

@@ -15,13 +15,8 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(morgan('dev'));
 
-// Serve file dari folder Laravel storage (kompatibel dengan data lama)
-app.use(
-  '/storage',
-  express.static(
-    path.join(__dirname, '..', 'backend', 'storage', 'app', 'public')
-  )
-);
+// Serve file upload (avatars, posts, communities)
+app.use('/storage', express.static(path.join(__dirname, 'storage')));
 
 // ── Health & root ───────────────────────────────────────
 app.get('/', (req, res) => {
