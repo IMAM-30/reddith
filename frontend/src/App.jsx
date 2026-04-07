@@ -17,7 +17,6 @@ import UserProfile from './pages/UserProfile';
 import ProfilePage from './pages/ProfilePage';
 import Search from './pages/Search';
 import Notifications from './pages/Notifications';
-import Messages from './pages/Messages';
 import Popular from './pages/Popular';
 import Rules from './pages/Rules';
 import Guide from './pages/Guide';
@@ -49,7 +48,6 @@ export default function App() {
             <Route path="/create-post" element={<ProtectedRoute><CreatePost /></ProtectedRoute>} />
             <Route path="/create-community" element={<ProtectedRoute><CreateCommunity /></ProtectedRoute>} />
             <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
-            <Route path="/messages" element={<ProtectedRoute><Messages /></ProtectedRoute>} />
           </Route>
         </Routes>
       </AuthProvider>

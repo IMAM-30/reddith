@@ -63,9 +63,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/update-profile', [UserController::class, 'updateProfile']);
 
     // Direct Messages
+    Route::get('/messages/threads', [MessageController::class, 'threads']);
     Route::get('/messages/inbox', [MessageController::class, 'inbox']);
     Route::get('/messages/sent', [MessageController::class, 'sent']);
     Route::get('/messages/conversation/{user}', [MessageController::class, 'conversation']);
     Route::post('/messages', [MessageController::class, 'store']);
     Route::patch('/messages/{message}/read', [MessageController::class, 'read']);
+    Route::delete('/messages/{message}', [MessageController::class, 'destroyMessage']);
+    Route::delete('/messages/thread/{user}', [MessageController::class, 'destroyThread']);
 });
