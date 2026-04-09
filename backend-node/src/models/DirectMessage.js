@@ -13,6 +13,7 @@ const DirectMessage = sequelize.define(
     receiver_id: { type: DataTypes.BIGINT.UNSIGNED, allowNull: false },
     body: { type: DataTypes.TEXT, allowNull: false },
     read_at: { type: DataTypes.DATE, allowNull: true },
+    reply_to_id: { type: DataTypes.BIGINT.UNSIGNED, allowNull: true },
   },
   {
     tableName: 'direct_messages',

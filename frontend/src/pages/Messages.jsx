@@ -70,6 +70,7 @@ export default function Messages() {
 
     const thread = threads.find((t) => t.user?.id === activeThread.id);
     if (thread && thread.unread_count > 0) {
+      api.patch(`/messages/conversation/${activeThread.id}/read-all`).catch(() => {});
       setThreads((prev) => prev.map((t) => t.user?.id === activeThread.id ? { ...t, unread_count: 0 } : t));
     }
 
@@ -185,13 +186,17 @@ export default function Messages() {
                         <span className="text-[10px] shrink-0 ml-2" style={{ color: 'var(--text-faint)' }}>{timeShort(thread.last_message.created_at)}</span>
                       )}
                     </div>
-                    <div className="flex items-center gap-1">
-                      <p className="text-xs truncate" style={{ color: thread.unread_count > 0 ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-xs truncate flex-1" style={{ color: thread.unread_count > 0 ? 'var(--text-primary)' : 'var(--text-muted)', fontWeight: thread.unread_count > 0 ? 600 : 400 }}>
                         {thread.last_message
                           ? `${thread.last_message.sender_id === user.id ? 'You: ' : ''}${thread.last_message.body}`
                           : 'Mulai percakapan...'}
                       </p>
-                      {thread.unread_count > 0 && <span className="w-2 h-2 rounded-full bg-orange-500 shrink-0" />}
+                      {thread.unread_count > 0 && (
+                        <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-orange-500 text-white text-[10px] font-bold flex items-center justify-center shrink-0">
+                          {thread.unread_count > 99 ? '99+' : thread.unread_count}
+                        </span>
+                      )}
                     </div>
                   </div>
                   {/* Delete thread button */}

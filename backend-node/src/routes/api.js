@@ -73,6 +73,7 @@ router.get('/messages/inbox', authRequired, message.inbox);
 router.get('/messages/sent', authRequired, message.sent);
 router.get('/messages/conversation/:userId', authRequired, message.conversation);
 router.post('/messages', authRequired, message.store);
+router.patch('/messages/conversation/:userId/read-all', authRequired, message.readThread);
 router.patch('/messages/:id/read', authRequired, message.read);
 router.delete('/messages/thread/:userId', authRequired, message.destroyThread);
 router.delete('/messages/:id', authRequired, message.destroyMessage);

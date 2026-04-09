@@ -1,73 +1,73 @@
-const { Op } = require('sequelize');
+const { Op, fn, col, literal } = require('sequelize');
 const { DirectMessage, User } = require('../models');
 const { assetUrl } = require('../utils/asset');
-const { calculateKarma } = require('../utils/userTransform');
-
-function transformUserMini(u) {
-  if (!u) return null;
-  const obj = u.toJSON ? u.toJSON() : { ...u };
-  obj.avatar_url = assetUrl(obj.avatar);
-  return obj;
-}
+const { calculateKarmaBatch } = require('../utils/userTransform');
 
 async function threads(req, res) {
   try {
     const userId = req.user.id;
 
-    const sentTo = await DirectMessage.findAll({
-      where: { sender_id: userId },
-      attributes: ['receiver_id'],
-      group: ['receiver_id'],
+    // 1. Ambil semua partner id dalam 1 query
+    const partners = await DirectMessage.findAll({
+      where: {
+        [Op.or]: [{ sender_id: userId }, { receiver_id: userId }],
+      },
+      attributes: [
+        [literal(`CASE WHEN sender_id = ${userId} THEN receiver_id ELSE sender_id END`), 'other_id'],
+      ],
+      group: ['other_id'],
+      raw: true,
     });
-    const receivedFrom = await DirectMessage.findAll({
-      where: { receiver_id: userId },
-      attributes: ['sender_id'],
-      group: ['sender_id'],
+    const ids = partners.map((p) => parseInt(p.other_id)).filter((id) => id && id !== userId);
+
+    if (!ids.length) return res.json([]);
+
+    // 2. Batch fetch: users, karma map, unread count map, last messages — paralel
+    const [users, karmaMap, unreadRows, lastMsgs] = await Promise.all([
+      User.findAll({ where: { id: { [Op.in]: ids } }, raw: true }),
+      calculateKarmaBatch(ids),
+      DirectMessage.findAll({
+        where: { receiver_id: userId, sender_id: { [Op.in]: ids }, read_at: null },
+        attributes: ['sender_id', [fn('COUNT', col('id')), 'cnt']],
+        group: ['sender_id'],
+        raw: true,
+      }),
+      // Last message per pair — fetch semua msg yg melibatkan user+partner, sort desc, ambil pertama per pair di JS
+      DirectMessage.findAll({
+        where: {
+          [Op.or]: [
+            { sender_id: userId, receiver_id: { [Op.in]: ids } },
+            { receiver_id: userId, sender_id: { [Op.in]: ids } },
+          ],
+        },
+        order: [['created_at', 'DESC']],
+      }),
+    ]);
+
+    const userMap = new Map(users.map((u) => [u.id, u]));
+    const unreadMap = new Map(unreadRows.map((r) => [parseInt(r.sender_id), parseInt(r.cnt)]));
+    const lastMsgMap = new Map();
+    for (const m of lastMsgs) {
+      const otherId = m.sender_id === userId ? m.receiver_id : m.sender_id;
+      if (!lastMsgMap.has(otherId)) lastMsgMap.set(otherId, m);
+    }
+
+    const threadsData = ids.map((otherId) => {
+      const u = userMap.get(otherId);
+      return {
+        user: u
+          ? {
+              id: u.id,
+              name: u.name,
+              username: u.username,
+              avatar_url: assetUrl(u.avatar),
+              karma: karmaMap.get(otherId) || 0,
+            }
+          : null,
+        last_message: lastMsgMap.get(otherId) || null,
+        unread_count: unreadMap.get(otherId) || 0,
+      };
     });
-
-    const ids = new Set();
-    sentTo.forEach((m) => ids.add(m.receiver_id));
-    receivedFrom.forEach((m) => ids.add(m.sender_id));
-
-    const threadsData = await Promise.all(
-      Array.from(ids).map(async (otherId) => {
-        const lastMessage = await DirectMessage.findOne({
-          where: {
-            [Op.or]: [
-              { sender_id: userId, receiver_id: otherId },
-              { sender_id: otherId, receiver_id: userId },
-            ],
-          },
-          order: [['created_at', 'DESC']],
-        });
-
-        const otherUser = await User.findByPk(otherId);
-        let other = null;
-        if (otherUser) {
-          other = {
-            id: otherUser.id,
-            name: otherUser.name,
-            username: otherUser.username,
-            avatar_url: assetUrl(otherUser.avatar),
-            karma: await calculateKarma(otherUser.id),
-          };
-        }
-
-        const unread = await DirectMessage.count({
-          where: {
-            sender_id: otherId,
-            receiver_id: userId,
-            read_at: null,
-          },
-        });
-
-        return {
-          user: other,
-          last_message: lastMessage,
-          unread_count: unread,
-        };
-      })
-    );
 
     threadsData.sort((a, b) => {
       const ta = a.last_message ? new Date(a.last_message.created_at).getTime() : 0;
@@ -182,9 +182,25 @@ async function conversation(req, res) {
       offset,
     });
 
+    // Batch fetch parent messages buat reply preview
+    const replyIds = [...new Set(rows.map((m) => m.reply_to_id).filter(Boolean))];
+    const parentMap = new Map();
+    if (replyIds.length) {
+      const parents = await DirectMessage.findAll({
+        where: { id: { [Op.in]: replyIds } },
+        attributes: ['id', 'sender_id', 'body'],
+        raw: true,
+      });
+      parents.forEach((p) => parentMap.set(p.id, p));
+    }
+
     const data = rows.map((m) => {
       const obj = m.toJSON();
       if (obj.sender) obj.sender.avatar_url = assetUrl(obj.sender.avatar);
+      if (obj.reply_to_id && parentMap.has(obj.reply_to_id)) {
+        const p = parentMap.get(obj.reply_to_id);
+        obj.reply_to = { id: p.id, sender_id: p.sender_id, body: p.body };
+      }
       return obj;
     });
 
@@ -205,7 +221,7 @@ async function conversation(req, res) {
 
 async function store(req, res) {
   try {
-    const { username, body } = req.body;
+    const { username, body, reply_to_id } = req.body;
     if (!username || !body) {
       return res.status(422).json({
         message: 'The given data was invalid.',
@@ -226,10 +242,23 @@ async function store(req, res) {
         });
     }
 
+    // Validasi reply_to_id (harus pesan dalam thread yang sama)
+    let validReplyId = null;
+    if (reply_to_id) {
+      const parent = await DirectMessage.findByPk(reply_to_id);
+      if (parent && (
+        (parent.sender_id === req.user.id && parent.receiver_id === receiver.id) ||
+        (parent.sender_id === receiver.id && parent.receiver_id === req.user.id)
+      )) {
+        validReplyId = parent.id;
+      }
+    }
+
     const message = await DirectMessage.create({
       sender_id: req.user.id,
       receiver_id: receiver.id,
       body,
+      reply_to_id: validReplyId,
     });
 
     const full = await DirectMessage.findByPk(message.id, {
@@ -239,6 +268,12 @@ async function store(req, res) {
     });
     const obj = full.toJSON();
     if (obj.receiver) obj.receiver.avatar_url = assetUrl(obj.receiver.avatar);
+
+    // Sertakan preview parent message kalau reply
+    if (validReplyId) {
+      const parent = await DirectMessage.findByPk(validReplyId, { attributes: ['id', 'sender_id', 'body'] });
+      if (parent) obj.reply_to = { id: parent.id, sender_id: parent.sender_id, body: parent.body };
+    }
     return res.status(201).json(obj);
   } catch (err) {
     console.error(err);
@@ -258,6 +293,28 @@ async function read(req, res) {
     message.read_at = new Date();
     await message.save();
     return res.json({ message: 'Marked as read.' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+}
+
+async function readThread(req, res) {
+  try {
+    const userId = req.user.id;
+    const otherId = parseInt(req.params.userId);
+    if (!otherId) return res.status(400).json({ message: 'Invalid user id.' });
+
+    const [affected] = await DirectMessage.update(
+      { read_at: new Date() },
+      {
+        where: {
+          sender_id: otherId,
+          receiver_id: userId,
+          read_at: null,
+        },
+      }
+    );
+    return res.json({ message: 'Thread marked as read.', updated: affected });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -305,6 +362,7 @@ module.exports = {
   conversation,
   store,
   read,
+  readThread,
   destroyMessage,
   destroyThread,
 };

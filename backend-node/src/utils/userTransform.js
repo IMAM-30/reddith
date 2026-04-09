@@ -1,6 +1,55 @@
-const { Op } = require('sequelize');
+const { Op, fn, col } = require('sequelize');
 const { assetUrl } = require('./asset');
 const { Vote, Post, Comment } = require('../models');
+
+// Versi batch — hitung karma untuk banyak user dalam beberapa query saja.
+// Return Map<userId, karma>.
+async function calculateKarmaBatch(userIds) {
+  const result = new Map(userIds.map((id) => [id, 0]));
+  if (!userIds.length) return result;
+
+  const [posts, comments] = await Promise.all([
+    Post.findAll({ where: { user_id: { [Op.in]: userIds } }, attributes: ['id', 'user_id'], raw: true }),
+    Comment.findAll({ where: { user_id: { [Op.in]: userIds } }, attributes: ['id', 'user_id'], raw: true }),
+  ]);
+
+  const postOwner = new Map(posts.map((p) => [p.id, p.user_id]));
+  const commentOwner = new Map(comments.map((c) => [c.id, c.user_id]));
+
+  const tasks = [];
+  if (posts.length) {
+    tasks.push(
+      Vote.findAll({
+        where: { voteable_type: Vote.TYPE_POST, voteable_id: { [Op.in]: [...postOwner.keys()] } },
+        attributes: ['voteable_id', [fn('SUM', col('value')), 'total']],
+        group: ['voteable_id'],
+        raw: true,
+      }).then((rows) => {
+        rows.forEach((r) => {
+          const uid = postOwner.get(parseInt(r.voteable_id));
+          if (uid != null) result.set(uid, (result.get(uid) || 0) + parseInt(r.total));
+        });
+      })
+    );
+  }
+  if (comments.length) {
+    tasks.push(
+      Vote.findAll({
+        where: { voteable_type: Vote.TYPE_COMMENT, voteable_id: { [Op.in]: [...commentOwner.keys()] } },
+        attributes: ['voteable_id', [fn('SUM', col('value')), 'total']],
+        group: ['voteable_id'],
+        raw: true,
+      }).then((rows) => {
+        rows.forEach((r) => {
+          const uid = commentOwner.get(parseInt(r.voteable_id));
+          if (uid != null) result.set(uid, (result.get(uid) || 0) + parseInt(r.total));
+        });
+      })
+    );
+  }
+  await Promise.all(tasks);
+  return result;
+}
 
 // Hitung karma user (sum value vote di semua post & comment yang dia tulis)
 async function calculateKarma(userId) {
@@ -46,4 +95,4 @@ async function transformUser(user, { withKarma = true } = {}) {
   return obj;
 }
 
-module.exports = { transformUser, calculateKarma };
+module.exports = { transformUser, calculateKarma, calculateKarmaBatch };

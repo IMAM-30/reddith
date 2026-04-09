@@ -55,6 +55,17 @@ async function start() {
     await sequelize.authenticate();
     console.log('✅ Database connected: MySQL (reddith)');
 
+    // Idempotent micro-migration: tambah kolom reply_to_id kalau belum ada
+    try {
+      const [cols] = await sequelize.query("SHOW COLUMNS FROM direct_messages LIKE 'reply_to_id'");
+      if (cols.length === 0) {
+        await sequelize.query('ALTER TABLE direct_messages ADD COLUMN reply_to_id BIGINT UNSIGNED NULL');
+        console.log('🛠  Migrated: direct_messages.reply_to_id');
+      }
+    } catch (e) {
+      console.warn('⚠️  reply_to_id migration skipped:', e.message);
+    }
+
     app.listen(PORT, () => {
       console.log(`🚀 Server berjalan di http://localhost:${PORT}`);
     });
