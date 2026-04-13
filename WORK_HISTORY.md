@@ -4,12 +4,13 @@ Catatan progres pengerjaan proyek. Baca bagian **Last Update** paling atas untuk
 
 ---
 
-## Last Update — 2026-04-07
+## Last Update — 2026-04-13
 
 ### Status Proyek
 ✅ **Backend sudah 100% migrasi dari Laravel ke Node.js + Express + Sequelize**
-✅ Semua kode di branch `master` (sinkron dengan GitHub)
-✅ Frontend tidak diubah (kontrak API persis sama, cuma `baseURL` ganti port)
+✅ **Fitur postingan & komentar sudah di-overhaul** — community opsional, threading rekursif, pagination, sorting
+✅ **Bug join community sudah fixed** — status membership persisten setelah reload
+✅ Branch aktif: `postingan-part` (belum di-merge ke `master`)
 
 ### Stack Final
 | Layer | Teknologi |
@@ -75,17 +76,127 @@ reddith/
 - ⬜ **Testing dengan Jest/Mocha** (poin syarat #11) — opsional, untuk maksimalkan nilai
 - ⬜ **Deployment ke cloud** (poin syarat #10) — opsional. Saran: Railway / Render untuk backend, Vercel untuk frontend
 - ⬜ **Test menyeluruh di browser** — pastikan semua fitur (login, post, comment, vote, message, notification, avatar upload) jalan via UI
+- ⬜ **Merge branch `postingan-part` ke `master`** — setelah test di browser selesai
 - ⬜ **Verifikasi password user lama** — bcrypt `$2y$` (Laravel) vs `$2a$` (Node). Sudah ada normalisasi di [authController.js:60](backend-node/src/controllers/authController.js#L60), tapi belum 100% terverifikasi. Workaround: register user baru.
 
 ### Catatan Penting
 - ⚠️ **Folder `backend/` Laravel sudah dihapus sepenuhnya** — tidak ada jalan kembali, semua data file sudah dipindah ke `backend-node/storage/`
 - ⚠️ **Polymorphic vote** (Opsi A) — tabel `votes` masih satu tabel dengan `voteable_type` + `voteable_id`. Sequelize tidak support polymorphic native, jadi relasi Vote↔Post/Comment dihandle manual di [voteController.js](backend-node/src/controllers/voteController.js)
-- ⚠️ **Database schema tidak diubah** — semua model Sequelize map ke tabel Laravel existing. Jangan lakukan `sequelize.sync()` (bisa drop kolom)
+- ⚠️ **Database schema diubah**: `posts.community_id` sekarang `NULLABLE` — post tanpa community diperbolehkan
 - ⚠️ **Branch utama: `master`** — bukan `main`. Tetap pakai `master`.
 
 ---
 
 ## Riwayat Pengerjaan (Kronologis)
+
+### 2026-04-13 — Overhaul Fitur Postingan & Komentar
+
+**Konteks:** Branch `postingan-part`. Fokus perbaikan fitur posting, join community, comment threading, dan quality audit.
+
+#### Sesi 1: Fix Join Community & Community Opsional
+
+**Bug join community** — saat user klik Join lalu reload halaman, status join hilang (kembali "Join"):
+- **Root cause**: endpoint `GET /communities/:slug` tidak mengembalikan status membership
+- [communityController.js](backend-node/src/controllers/communityController.js) — `show()` sekarang return `is_member: true/false` berdasarkan data `community_user`
+- [api.js](backend-node/src/routes/api.js) — route `/communities/:slug` pakai `authOptional` agar `req.user` tersedia
+- [CommunityDetail.jsx](frontend/src/pages/CommunityDetail.jsx) — `useEffect` sync `joined` state dari `community.is_member`
+
+**Community opsional saat buat post:**
+- [Post.js](backend-node/src/models/Post.js) — `community_id` diubah ke `allowNull: true`
+- Database `posts.community_id` di-ALTER jadi `NULLABLE`
+- [postController.js](backend-node/src/controllers/postController.js) — validasi `community_id` hanya jika diisi
+- [CreatePost.jsx](frontend/src/pages/CreatePost.jsx) — label "(opsional)", placeholder "Tanpa community"
+
+**Dropdown hanya tampilkan joined communities:**
+- Endpoint baru `GET /my-communities` (auth required) — return communities yang user sudah join
+- Endpoint baru `GET /users/:username/communities` — return communities yang user tertentu join
+- [CreatePost.jsx](frontend/src/pages/CreatePost.jsx) — fetch dari `/my-communities` bukan `/communities`
+
+**Tampilkan joined communities di profile:**
+- [ProfileSidebar.jsx](frontend/src/components/profile/ProfileSidebar.jsx) — fetch dan tampilkan list communities dengan icon + nama + member count
+- Stats grid menampilkan jumlah communities aktual (bukan hardcode 0)
+
+#### Sesi 2: Post Tanpa Community — Display
+
+Post tanpa community sebelumnya menampilkan `r/` kosong. Sekarang:
+- [Home.jsx](frontend/src/pages/Home.jsx) — `CommunityAvatar` diganti `PostAvatar` yang menampilkan avatar user jika tanpa community
+- Header PostCard: tanpa community → `u/{username}` sebagai link utama (bold), dengan community → tetap `r/{name}` + `u/{username}`
+- [PostDetail.jsx](frontend/src/pages/PostDetail.jsx) — avatar dan header yang sama untuk halaman detail
+
+#### Sesi 3: Perbaikan Tanggal, Hapus Komentar, Sort
+
+**Format tanggal:** `timeAgo()` di [Home.jsx](frontend/src/pages/Home.jsx) dan [PostDetail.jsx](frontend/src/pages/PostDetail.jsx):
+- < 7 hari: relative (`just now`, `5m ago`, `3h ago`, `2d ago`)
+- >= 7 hari: tanggal lengkap (`13 Apr 2026`)
+
+**Hapus komentar dengan konfirmasi popup:**
+- Tombol "Hapus" muncul di samping Reply hanya untuk komentar milik sendiri
+- Klik → `ConfirmDeleteModal` (popup sama seperti hapus post) → DELETE API
+
+**Sort by aktif (hanya New & Top):**
+- Dropdown sort: hanya 2 opsi "New" dan "Top" (hapus "Best")
+- New: `created_at` terbaru di atas. Top: `votes_sum_value` tertinggi di atas
+- Sorting hanya untuk main comments, sub-comments tetap kronologis
+
+#### Sesi 4: Rebuild Comment Threading — Rekursif Unlimited Depth
+
+**Sebelum:** Flat 2-level system — semua reply masuk ke parent top-level.
+**Sesudah:** True recursive nesting dengan depth tak terbatas.
+
+**Backend** — [commentController.js](backend-node/src/controllers/commentController.js):
+- `batchEnrichFlat()` — enrich vote data untuk semua comment dalam 2 query (bukan N+1)
+- `buildCommentTree()` — 2-pass algorithm: index semua comment ke Map, lalu pasangkan ke parent. Hasilnya nested tree
+- `index()` — fetch semua comment flat `ORDER BY created_at ASC`, enrich, build tree, paginate root-level
+
+**Frontend** — [PostDetail.jsx](frontend/src/pages/PostDetail.jsx) `Comment` component:
+- Reply ke comment manapun → `parent_id = comment.id` (bukan top-level lagi)
+- Setiap level reply meng-indent lebih dalam via thread line rekursif
+- **Hide/Show replies:** tombol toggle per comment, default terbuka untuk depth < 2
+- **Show more replies:** 3 → 5 → semua + Hide button
+
+#### Sesi 5: Pagination Komentar — 5/3 System
+
+**Main comments:** `MAIN_PAGE_SIZE = 5`
+- Awal 5 → Show more (+5 = 10) → Show more (semua) → Hide (kembali ke 5)
+
+**Sub-comments (replies):** `REPLY_FIRST = 3`, `REPLY_SECOND = 5`
+- Awal 3 → Show more (5) → Show more (semua) → Hide (kembali ke 3)
+
+#### Sesi 6: Quality Audit & Bug Fix
+
+Full audit sistem post + comment. **5 perbaikan:**
+
+1. **Community `icon_url` tidak ter-transform** — [postController.js](backend-node/src/controllers/postController.js)
+   - `withCounts()` dan `batchEnrich()` sekarang menambahkan `community.icon_url = assetUrl(community.icon)`
+
+2. **Validasi file size 2MB** — [CreatePost.jsx](frontend/src/pages/CreatePost.jsx)
+   - Frontend menolak file > 2MB sebelum upload, tampilkan error
+
+3. **Delete comment cascade** — [commentController.js](backend-node/src/controllers/commentController.js)
+   - `destroy()` sekarang hapus semua child replies secara rekursif sebelum hapus parent
+
+4. **Validasi `parent_id` di comment store** — [commentController.js](backend-node/src/controllers/commentController.js)
+   - Validasi parent comment exists dan berada di post yang sama sebelum create reply
+
+5. **Vote optimistic update — stale closure fix** — [Home.jsx](frontend/src/pages/Home.jsx) + [PostDetail.jsx](frontend/src/pages/PostDetail.jsx)
+   - Semua vote handler (PostCard, PostDetail, Comment) pakai functional `setState` untuk hindari rollback ke state stale
+
+#### File yang Diubah (Ringkasan)
+
+| File | Perubahan |
+|------|-----------|
+| `backend-node/src/controllers/communityController.js` | + `is_member`, + `myCommunities()`, + `userCommunities()` |
+| `backend-node/src/controllers/postController.js` | `community_id` opsional, + `icon_url` transform |
+| `backend-node/src/controllers/commentController.js` | Rebuild tree-based threading, cascade delete, parent validation |
+| `backend-node/src/models/Post.js` | `community_id` → `allowNull: true` |
+| `backend-node/src/routes/api.js` | + `/my-communities`, + `/users/:username/communities`, `authOptional` pada show community |
+| `frontend/src/pages/Home.jsx` | `PostAvatar`, `timeAgo` 7-day cutoff, vote fix |
+| `frontend/src/pages/PostDetail.jsx` | Rewrite Comment component (recursive, pagination 5/3, sort, delete confirm, vote fix) |
+| `frontend/src/pages/CreatePost.jsx` | Community opsional, joined-only dropdown, 2MB validation |
+| `frontend/src/pages/CommunityDetail.jsx` | Sync `joined` state dari `is_member` |
+| `frontend/src/components/profile/ProfileSidebar.jsx` | + list joined communities, real community count |
+
+---
 
 ### 2026-04-07 — Migrasi Backend Laravel → Node.js
 

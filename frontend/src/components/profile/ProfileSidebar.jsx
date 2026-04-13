@@ -1,6 +1,17 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
+import api from '../../services/api';
 
 export default function ProfileSidebar({ profile, isOwner = false }) {
+  const [communities, setCommunities] = useState([]);
+
+  useEffect(() => {
+    if (profile?.username) {
+      api.get(`/users/${profile.username}/communities`)
+        .then((res) => setCommunities(res.data || []))
+        .catch(() => {});
+    }
+  }, [profile?.username]);
   const [copied, setCopied] = useState(false);
 
   const redditAge = () => {
@@ -66,10 +77,38 @@ export default function ProfileSidebar({ profile, isOwner = false }) {
           <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Reddit Age</p>
         </div>
         <div>
-          <p className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>0</p>
-          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Active in</p>
+          <p className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>{communities.length}</p>
+          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Communities</p>
         </div>
       </div>
+
+      {/* Communities */}
+      {communities.length > 0 && (
+        <div className="px-4 mt-5">
+          <p className="text-xs font-semibold tracking-wide uppercase mb-3" style={{ color: 'var(--text-muted)' }}>Communities</p>
+          <div className="space-y-2">
+            {communities.map((c) => (
+              <Link
+                key={c.id}
+                to={`/community/${c.slug}`}
+                className="flex items-center gap-2.5 p-2 rounded-lg transition-colors hover:opacity-80"
+                style={{ backgroundColor: 'var(--bg-input)' }}
+              >
+                <div
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0"
+                  style={{ background: 'linear-gradient(135deg, #ff6b35, #f7931e)' }}
+                >
+                  {c.name?.charAt(0).toUpperCase()}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>r/{c.name}</p>
+                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{c.members_count || 0} member</p>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Settings */}
       {isOwner && (
@@ -77,12 +116,11 @@ export default function ProfileSidebar({ profile, isOwner = false }) {
           <p className="text-xs font-semibold tracking-wide uppercase mb-3" style={{ color: 'var(--text-muted)' }}>Settings</p>
           <div className="space-y-3">
             {[
-              { icon: '👤', title: 'Profile', desc: 'Customize your profile' },
-              { icon: '🖼️', title: 'Avatar', desc: 'Style your avatar' },
+              { title: 'Profile', desc: 'Customize your profile' },
+              { title: 'Avatar', desc: 'Style your avatar' },
             ].map((item) => (
               <div key={item.title} className="flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
-                  <span className="text-base">{item.icon}</span>
                   <div>
                     <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{item.title}</p>
                     <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{item.desc}</p>

@@ -14,11 +14,17 @@ export default function CreatePost() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    api.get('/communities').then((res) => setCommunities(res.data.data || []));
+    api.get('/my-communities').then((res) => setCommunities(res.data || [])).catch(() => {});
   }, []);
 
   const handleImageChange = (e) => {
     const file = e.target.files[0];
+    if (file && file.size > 2 * 1024 * 1024) {
+      setErrors({ image: ['Ukuran file maksimal 2MB.'] });
+      e.target.value = '';
+      return;
+    }
+    setErrors((prev) => { const { image, ...rest } = prev; return rest; });
     setForm({ ...form, image: file });
     if (file) {
       const reader = new FileReader();
@@ -37,7 +43,7 @@ export default function CreatePost() {
     const formData = new FormData();
     formData.append('title', form.title);
     formData.append('body', form.body);
-    formData.append('community_id', form.community_id);
+    if (form.community_id) formData.append('community_id', form.community_id);
     if (form.image) formData.append('image', form.image);
 
     try {
@@ -69,19 +75,23 @@ export default function CreatePost() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>Community</label>
+            <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>
+              Community <span style={{ color: 'var(--text-faint)' }}>(opsional)</span>
+            </label>
             <select
               value={form.community_id}
               onChange={(e) => setForm({ ...form, community_id: e.target.value })}
               className="w-full px-3 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400/50"
               style={inputStyle}
-              required
             >
-              <option value="">Pilih community...</option>
+              <option value="">Tanpa community</option>
               {communities.map((c) => (
                 <option key={c.id} value={c.id}>r/{c.name}</option>
               ))}
             </select>
+            {communities.length === 0 && (
+              <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>Belum join community manapun. Join community terlebih dahulu untuk memposting ke community.</p>
+            )}
             {errors.community_id && <p className="text-red-500 text-xs mt-1">{errors.community_id[0]}</p>}
           </div>
 

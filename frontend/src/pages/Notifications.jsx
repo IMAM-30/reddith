@@ -52,7 +52,6 @@ export default function Notifications() {
 
       {notifications.length === 0 ? (
         <div className="text-center py-16 rounded-xl" style={cardStyle}>
-          <p className="text-4xl mb-3">🔔</p>
           <p className="font-medium" style={{ color: 'var(--text-primary)' }}>Belum ada notifikasi</p>
           <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>Notifikasi baru akan muncul di sini.</p>
         </div>

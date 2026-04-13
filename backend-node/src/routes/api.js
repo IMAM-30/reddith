@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 
-const { authRequired } = require('../middleware/auth');
+const { authRequired, authOptional } = require('../middleware/auth');
 const { createUploader } = require('../middleware/upload');
 
 const auth = require('../controllers/authController');
@@ -22,20 +22,22 @@ const uploadAvatar = createUploader('avatars').single('avatar');
 router.post('/register', auth.register);
 router.post('/login', auth.login);
 
-router.get('/posts', post.index);
-router.get('/posts/:id', post.show);
+router.get('/posts', authOptional, post.index);
+router.get('/posts/:id', authOptional, post.show);
 
 router.get('/communities', community.index);
-router.get('/communities/:slug', community.show);
-router.get('/communities/:slug/posts', post.byCommunity);
+router.get('/my-communities', authRequired, community.myCommunities);
+router.get('/communities/:slug', authOptional, community.show);
+router.get('/communities/:slug/posts', authOptional, post.byCommunity);
 
-router.get('/posts/:id/comments', comment.index);
+router.get('/posts/:id/comments', authOptional, comment.index);
 
 router.get('/search', search.search);
 
 router.get('/profile/:id', user.profile);
 router.get('/users/:username', user.show);
-router.get('/users/:username/posts', user.userPosts);
+router.get('/users/:username/posts', authOptional, user.userPosts);
+router.get('/users/:username/communities', community.userCommunities);
 
 // ── Protected ───────────────────────────────────────────
 router.post('/logout', authRequired, auth.logout);

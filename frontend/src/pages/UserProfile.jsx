@@ -1,5 +1,7 @@
-import { Link, useParams } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useParams } from 'react-router-dom';
 import { useApi } from '../hooks/useApi';
+import { PostCard } from './Home';
 
 const cardStyle = { backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' };
 
@@ -7,11 +9,13 @@ export default function UserProfile() {
   const { username } = useParams();
   const { data: profile, loading: loadingProfile } = useApi(`/users/${username}`);
   const { data: postsData, loading: loadingPosts } = useApi(`/users/${username}/posts`);
+  const [posts, setPosts] = useState([]);
+
+  useEffect(() => { if (postsData?.data) setPosts(postsData.data); }, [postsData]);
+  const handleDeleted = (id) => setPosts((p) => p.filter((x) => x.id !== id));
 
   if (loadingProfile) return <p className="text-center py-8" style={{ color: 'var(--text-muted)' }}>Memuat...</p>;
   if (!profile) return <p className="text-center py-8" style={{ color: 'var(--text-muted)' }}>User tidak ditemukan.</p>;
-
-  const posts = postsData?.data || [];
 
   return (
     <div>
@@ -31,22 +35,7 @@ export default function UserProfile() {
         ) : posts.length === 0 ? (
           <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Belum ada post.</p>
         ) : (
-          posts.map((post) => (
-            <div key={post.id} className="rounded-lg p-4 transition-colors" style={cardStyle}>
-              <div className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>
-                <Link to={`/r/${post.community?.slug}`} className="hover:text-orange-500">
-                  r/{post.community?.name}
-                </Link>
-              </div>
-              <Link to={`/post/${post.id}`}>
-                <h3 className="text-base font-medium hover:text-orange-500" style={{ color: 'var(--text-primary)' }}>{post.title}</h3>
-              </Link>
-              <div className="flex items-center gap-4 mt-2 text-xs" style={{ color: 'var(--text-muted)' }}>
-                <span>{post.votes_sum_value || 0} vote</span>
-                <span>{post.comments_count || 0} komentar</span>
-              </div>
-            </div>
-          ))
+          posts.map((post) => <PostCard key={post.id} post={post} onDeleted={handleDeleted} />)
         )}
       </div>
     </div>

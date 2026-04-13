@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useApi } from '../hooks/useApi';
 import { useAuth } from '../context/AuthContext';
 import ProfileSidebar from '../components/profile/ProfileSidebar';
 import ProfileAvatar from '../components/profile/ProfileAvatar';
+import { PostCard } from './Home';
 
 const cardStyle = { backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' };
 
@@ -16,6 +17,10 @@ export default function ProfilePage() {
     [profile?.username]
   );
   const [tab, setTab] = useState('posts');
+  const [localPosts, setLocalPosts] = useState([]);
+  useEffect(() => {
+    if (postsData?.data) setLocalPosts(postsData.data);
+  }, [postsData]);
 
   if (loadingProfile) {
     return (
@@ -28,14 +33,14 @@ export default function ProfilePage() {
   if (!profile) {
     return (
       <div className="text-center py-16">
-        <p className="text-5xl mb-3">😔</p>
         <p className="text-lg font-medium" style={{ color: 'var(--text-primary)' }}>User tidak ditemukan</p>
       </div>
     );
   }
 
-  const posts = postsData?.data || [];
+  const posts = localPosts;
   const isOwner = user && user.id === profile.id;
+  const handleDeleted = (id) => setLocalPosts((p) => p.filter((x) => x.id !== id));
 
   const handleAvatarChange = (newAvatarUrl) => {
     setProfile({ ...profile, avatar: newAvatarUrl, avatar_url: newAvatarUrl });
@@ -126,64 +131,7 @@ export default function ProfilePage() {
               </div>
             ) : (
               posts.map((post) => (
-                <div key={post.id} className="rounded-xl overflow-hidden" style={cardStyle}>
-                  <div className="flex items-center gap-2 px-4 pt-3 pb-2">
-                    <div
-                      className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0"
-                      style={{ background: 'linear-gradient(135deg, #ff6b35, #f7931e)' }}
-                    >
-                      {post.community?.name?.charAt(0).toUpperCase()}
-                    </div>
-                    <Link to={`/r/${post.community?.slug}`} className="text-xs font-semibold hover:underline" style={{ color: 'var(--text-primary)' }}>
-                      r/{post.community?.name}
-                    </Link>
-                    <span className="text-xs" style={{ color: 'var(--text-faint)' }}>·</span>
-                    <span className="text-xs" style={{ color: 'var(--text-faint)' }}>
-                      {new Date(post.created_at).toLocaleDateString('id-ID')}
-                    </span>
-                  </div>
-
-                  <Link to={`/post/${post.id}`} className="block px-4 pb-2">
-                    <h3 className="text-base font-semibold hover:text-orange-500 transition-colors" style={{ color: 'var(--text-primary)' }}>
-                      {post.title}
-                    </h3>
-                  </Link>
-
-                  {post.body && !post.image && (
-                    <div className="px-4 pb-3">
-                      <p className="text-sm line-clamp-3" style={{ color: 'var(--text-secondary)' }}>{post.body}</p>
-                    </div>
-                  )}
-
-                  {post.image && (
-                    <Link to={`/post/${post.id}`} className="block px-4 pb-3">
-                      <img
-                        src={`http://localhost:8000/storage/${post.image}`}
-                        alt=""
-                        className="w-full rounded-xl object-cover"
-                        style={{ maxHeight: '400px' }}
-                      />
-                    </Link>
-                  )}
-
-                  <div className="flex items-center gap-2 px-3 pb-3">
-                    <div className="flex items-center rounded-full h-8 text-xs" style={{ backgroundColor: 'var(--bg-input)' }}>
-                      <span className="px-3 font-semibold" style={{ color: 'var(--text-primary)' }}>
-                        <svg className="w-3.5 h-3.5 inline mr-1" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" /></svg>
-                        {post.votes_sum_value || 0}
-                        <svg className="w-3.5 h-3.5 inline ml-1" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
-                      </span>
-                    </div>
-                    <Link
-                      to={`/post/${post.id}`}
-                      className="flex items-center gap-1.5 rounded-full h-8 px-3 text-xs font-medium"
-                      style={{ backgroundColor: 'var(--bg-input)', color: 'var(--text-muted)' }}
-                    >
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
-                      {post.comments_count || 0}
-                    </Link>
-                  </div>
-                </div>
+                <PostCard key={post.id} post={post} onDeleted={handleDeleted} />
               ))
             )}
           </div>

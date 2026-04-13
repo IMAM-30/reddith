@@ -2,7 +2,8 @@ import { Link, useParams } from 'react-router-dom';
 import { useApi } from '../hooks/useApi';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { PostCard } from './Home';
 
 const cardStyle = { backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' };
 
@@ -13,6 +14,11 @@ export default function CommunityDetail() {
   const { data: postsData, loading: loadingPosts } = useApi(`/communities/${slug}/posts`);
   const [joined, setJoined] = useState(false);
   const [joining, setJoining] = useState(false);
+
+  // Sync joined state dari API response
+  useEffect(() => {
+    if (community) setJoined(!!community.is_member);
+  }, [community]);
 
   if (loadingCommunity) {
     return (
@@ -25,13 +31,14 @@ export default function CommunityDetail() {
   if (!community) {
     return (
       <div className="text-center py-16">
-        <p className="text-5xl mb-3">🔍</p>
         <p className="text-lg font-medium" style={{ color: 'var(--text-primary)' }}>Community tidak ditemukan</p>
       </div>
     );
   }
 
-  const posts = postsData?.data || [];
+  const [posts, setPosts] = useState([]);
+  useEffect(() => { if (postsData?.data) setPosts(postsData.data); }, [postsData]);
+  const handleDeleted = (id) => setPosts((p) => p.filter((x) => x.id !== id));
 
   const handleJoin = async () => {
     setJoining(true);
@@ -96,7 +103,6 @@ export default function CommunityDetail() {
           </div>
         ) : posts.length === 0 ? (
           <div className="text-center py-12 rounded-xl" style={cardStyle}>
-            <p className="text-4xl mb-2">📝</p>
             <p className="font-medium" style={{ color: 'var(--text-primary)' }}>Belum ada post</p>
             <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>Jadilah yang pertama memposting!</p>
             {user && (
@@ -107,27 +113,7 @@ export default function CommunityDetail() {
           </div>
         ) : (
           posts.map((post) => (
-            <div key={post.id} className="rounded-xl p-4 transition-all" style={cardStyle}>
-              <div className="text-xs mb-2" style={{ color: 'var(--text-muted)' }}>
-                <Link to={`/user/${post.user?.username}`} className="hover:text-orange-500">
-                  u/{post.user?.username}
-                </Link>
-              </div>
-              <Link to={`/post/${post.id}`}>
-                <h2 className="text-base font-semibold hover:text-orange-500 mb-1 transition-colors" style={{ color: 'var(--text-primary)' }}>{post.title}</h2>
-                {post.body && <p className="text-sm line-clamp-3" style={{ color: 'var(--text-secondary)' }}>{post.body}</p>}
-              </Link>
-              <div className="flex items-center gap-4 mt-3 text-xs" style={{ color: 'var(--text-muted)' }}>
-                <span className="flex items-center gap-1">
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" /></svg>
-                  {post.votes_sum_value || 0}
-                </span>
-                <Link to={`/post/${post.id}`} className="flex items-center gap-1 hover:text-orange-500">
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
-                  {post.comments_count || 0}
-                </Link>
-              </div>
-            </div>
+            <PostCard key={post.id} post={post} onDeleted={handleDeleted} />
           ))
         )}
       </div>

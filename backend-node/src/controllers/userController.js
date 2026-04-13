@@ -6,7 +6,7 @@ const {
   relativePathFromFile,
   deleteStorageFile,
 } = require('../middleware/upload');
-const { withCounts } = require('./postController');
+const { batchEnrich } = require('./postController');
 
 async function show(req, res) {
   try {
@@ -126,7 +126,7 @@ async function userPosts(req, res) {
       distinct: true,
     });
 
-    const data = await Promise.all(rows.map(withCounts));
+    const data = await batchEnrich(rows, req.user?.id || null);
 
     return res.json({
       current_page: page,

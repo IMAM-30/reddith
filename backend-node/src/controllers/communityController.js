@@ -131,6 +131,15 @@ async function show(req, res) {
     });
     obj.posts_count = await Post.count({ where: { community_id: community.id } });
 
+    // Cek apakah user yang sedang login sudah member
+    obj.is_member = false;
+    if (req.user) {
+      const membership = await CommunityUser.findOne({
+        where: { community_id: community.id, user_id: req.user.id },
+      });
+      obj.is_member = !!membership;
+    }
+
     return res.json(obj);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -167,4 +176,67 @@ async function leave(req, res) {
   }
 }
 
-module.exports = { index, store, show, join, leave, transformCommunity };
+// Community yang sudah di-join oleh user yang login
+async function myCommunities(req, res) {
+  try {
+    const memberships = await CommunityUser.findAll({
+      where: { user_id: req.user.id },
+      attributes: ['community_id'],
+    });
+    const ids = memberships.map((m) => m.community_id);
+    if (ids.length === 0) return res.json([]);
+
+    const communities = await Community.findAll({
+      where: { id: { [Op.in]: ids } },
+      order: [['name', 'ASC']],
+    });
+
+    const data = await Promise.all(
+      communities.map(async (c) => {
+        const obj = transformCommunity(c);
+        obj.members_count = await CommunityUser.count({ where: { community_id: c.id } });
+        return obj;
+      })
+    );
+
+    return res.json(data);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: err.message });
+  }
+}
+
+// Community yang di-join oleh user tertentu (berdasarkan username)
+async function userCommunities(req, res) {
+  try {
+    const user = await User.findOne({ where: { username: req.params.username } });
+    if (!user) return res.status(404).json({ message: 'User tidak ditemukan.' });
+
+    const memberships = await CommunityUser.findAll({
+      where: { user_id: user.id },
+      attributes: ['community_id'],
+    });
+    const ids = memberships.map((m) => m.community_id);
+    if (ids.length === 0) return res.json([]);
+
+    const communities = await Community.findAll({
+      where: { id: { [Op.in]: ids } },
+      order: [['name', 'ASC']],
+    });
+
+    const data = await Promise.all(
+      communities.map(async (c) => {
+        const obj = transformCommunity(c);
+        obj.members_count = await CommunityUser.count({ where: { community_id: c.id } });
+        return obj;
+      })
+    );
+
+    return res.json(data);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: err.message });
+  }
+}
+
+module.exports = { index, store, show, join, leave, myCommunities, userCommunities, transformCommunity };

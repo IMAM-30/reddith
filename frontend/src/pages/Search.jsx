@@ -1,5 +1,6 @@
 import { Link, useSearchParams } from 'react-router-dom';
 import { useApi } from '../hooks/useApi';
+import { PostCard } from './Home';
 
 const cardStyle = { backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' };
 
@@ -11,7 +12,6 @@ export default function Search() {
   if (!q) {
     return (
       <div className="text-center py-16">
-        <p className="text-4xl mb-3">🔍</p>
         <p className="font-medium" style={{ color: 'var(--text-primary)' }}>Cari sesuatu</p>
         <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>Masukkan kata kunci di kolom pencarian.</p>
       </div>
@@ -37,7 +37,6 @@ export default function Search() {
 
       {!hasResults && (
         <div className="text-center py-16 rounded-xl" style={cardStyle}>
-          <p className="text-4xl mb-3">😕</p>
           <p className="font-medium" style={{ color: 'var(--text-primary)' }}>Tidak ada hasil</p>
           <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>Coba kata kunci yang berbeda.</p>
         </div>
@@ -72,18 +71,7 @@ export default function Search() {
             Post
           </h2>
           <div className="space-y-3">
-            {posts.map((post) => (
-              <div key={post.id} className="rounded-xl p-4 transition-all" style={cardStyle}>
-                <div className="text-xs mb-2" style={{ color: 'var(--text-muted)' }}>
-                  <Link to={`/r/${post.community?.slug}`} className="hover:text-orange-500">r/{post.community?.name}</Link>
-                  {' · '}
-                  <Link to={`/user/${post.user?.username}`} className="hover:text-orange-500">u/{post.user?.username}</Link>
-                </div>
-                <Link to={`/post/${post.id}`}>
-                  <h3 className="text-base font-semibold hover:text-orange-500 transition-colors" style={{ color: 'var(--text-primary)' }}>{post.title}</h3>
-                </Link>
-              </div>
-            ))}
+            {posts.map((post) => <PostCard key={post.id} post={post} />)}
           </div>
         </div>
       )}
