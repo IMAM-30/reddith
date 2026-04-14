@@ -44,22 +44,34 @@ async function register(req, res) {
 
 async function login(req, res) {
   try {
-    const { email, password } = req.body;
-    const user = await User.findOne({ where: { email } });
+    const { identifier, email, password } = req.body;
+    const id = (identifier || email || '').trim();
+    if (!id || !password) {
+      return res.status(422).json({
+        message: 'The given data was invalid.',
+        errors: {
+          identifier: !id ? ['Email / Username / NIM required.'] : undefined,
+          password: !password ? ['Password required.'] : undefined,
+        },
+      });
+    }
+
+    const user = await User.findOne({
+      where: { [Op.or]: [{ email: id }, { username: id }, { nim: id }] },
+    });
     if (!user) {
-      return res.status(401).json({ message: 'Email atau password salah.' });
+      return res.status(401).json({ message: 'Kredensial salah.' });
     }
 
     // bcryptjs handles both $2a$ and $2y$ (Laravel) formats
     let stored = user.password;
-    // Normalize $2y$ → $2a$ for compatibility (some bcryptjs versions need this)
     if (stored && stored.startsWith('$2y$')) {
       stored = '$2a$' + stored.slice(4);
     }
 
     const ok = await bcrypt.compare(password, stored);
     if (!ok) {
-      return res.status(401).json({ message: 'Email atau password salah.' });
+      return res.status(401).json({ message: 'Kredensial salah.' });
     }
 
     const token = signToken({ id: user.id });

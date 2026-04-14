@@ -28,17 +28,46 @@ export default function Search() {
 
   const posts = data?.posts || [];
   const communities = data?.communities || [];
-  const hasResults = posts.length > 0 || communities.length > 0;
+  const users = data?.users || [];
+  const hasResults = posts.length > 0 || communities.length > 0 || users.length > 0;
 
   return (
     <div>
       <h1 className="text-xl font-bold mb-1" style={{ color: 'var(--text-primary)' }}>Hasil pencarian</h1>
-      <p className="text-sm mb-5" style={{ color: 'var(--text-muted)' }}>"{q}" — {posts.length + communities.length} hasil</p>
+      <p className="text-sm mb-5" style={{ color: 'var(--text-muted)' }}>"{q}" — {posts.length + communities.length + users.length} hasil</p>
 
       {!hasResults && (
         <div className="text-center py-16 rounded-xl" style={cardStyle}>
           <p className="font-medium" style={{ color: 'var(--text-primary)' }}>Tidak ada hasil</p>
           <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>Coba kata kunci yang berbeda.</p>
+        </div>
+      )}
+
+      {users.length > 0 && (
+        <div className="mb-6">
+          <h2 className="text-sm font-semibold mb-3 flex items-center gap-2" style={{ color: 'var(--text-secondary)' }}>
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+            People
+          </h2>
+          <div className="space-y-2">
+            {users.map((u) => (
+              <Link key={u.id} to={`/user/${u.username}`} className="flex items-center gap-3 rounded-xl p-3 transition-all" style={cardStyle}>
+                {u.avatar_url ? (
+                  <img src={u.avatar_url} alt="" className="w-9 h-9 rounded-full object-cover shrink-0" />
+                ) : (
+                  <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold text-white shrink-0" style={{ background: 'linear-gradient(135deg, #ff6b35, #f7931e)' }}>
+                    {u.username?.charAt(0).toUpperCase()}
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium text-sm truncate" style={{ color: 'var(--text-primary)' }}>u/{u.username}</div>
+                  <div className="text-xs truncate" style={{ color: 'var(--text-faint)' }}>
+                    {u.name} · {u.karma} karma
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
         </div>
       )}
 

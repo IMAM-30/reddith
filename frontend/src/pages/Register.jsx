@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import PasswordInput from '../components/auth/PasswordInput';
 
 const cardStyle = { backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' };
 const inputStyle = { backgroundColor: 'var(--bg-input)', borderColor: 'var(--border-color)', color: 'var(--text-primary)' };
@@ -69,16 +70,26 @@ export default function Register() {
                 {label}
                 {key === 'nim' && <span className="font-normal ml-1" style={{ color: 'var(--text-faint)' }}>(9 digit)</span>}
               </label>
-              <input
-                type={type}
-                placeholder={placeholder}
-                value={form[key]}
-                onChange={set(key)}
-                maxLength={maxLength}
-                className="w-full px-3 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400/50"
-                style={inputStyle}
-                required
-              />
+              {type === 'password' ? (
+                <PasswordInput
+                  placeholder={placeholder}
+                  value={form[key]}
+                  onChange={set(key)}
+                  autoComplete={key === 'password' ? 'new-password' : 'new-password'}
+                  required
+                />
+              ) : (
+                <input
+                  type={type}
+                  placeholder={placeholder}
+                  value={form[key]}
+                  onChange={set(key)}
+                  maxLength={maxLength}
+                  className="w-full px-3 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400/50"
+                  style={inputStyle}
+                  required
+                />
+              )}
               {errors[key] && <p className="text-red-500 text-xs mt-1">{errors[key][0]}</p>}
             </div>
           ))}
