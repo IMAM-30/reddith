@@ -3,7 +3,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { useState } from 'react';
 
-export default function Navbar({ onChatToggle, unreadMessages = 0 }) {
+export default function Navbar({ onChatToggle, unreadMessages = 0, unreadNotifications = 0 }) {
   const { user, logout } = useAuth();
   const { dark, toggleTheme } = useTheme();
   const navigate = useNavigate();
@@ -56,8 +56,20 @@ export default function Navbar({ onChatToggle, unreadMessages = 0 }) {
 
           {user ? (
             <>
-              <Link to="/notifications" className="text-sm hover:text-orange-500" style={{ color: 'var(--text-muted)' }}>
-                Notifikasi
+              <Link
+                to="/notifications"
+                className="relative hover:text-orange-500"
+                style={{ color: 'var(--text-muted)' }}
+                title="Notifikasi"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.4-1.4A2 2 0 0118 14.2V11a6 6 0 10-12 0v3.2a2 2 0 01-.6 1.4L4 17h5m6 0a3 3 0 11-6 0m6 0H9" />
+                </svg>
+                {unreadNotifications > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1 flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold">
+                    {unreadNotifications > 99 ? '99+' : unreadNotifications}
+                  </span>
+                )}
               </Link>
               <button onClick={onChatToggle} className="relative hover:text-orange-500" style={{ color: 'var(--text-muted)' }} title="Chat">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">

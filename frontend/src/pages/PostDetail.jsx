@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
-import { Link, useParams, useNavigate } from 'react-router-dom';
+import { useState, useEffect, useRef, useMemo } from 'react';
+import { Link, useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useApi } from '../hooks/useApi';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
@@ -102,12 +102,15 @@ const MAIN_PAGE_SIZE = 5;
 const REPLY_FIRST = 3;
 const REPLY_SECOND = 5;
 
-function Comment({ comment: initial, postId, onDeleted, depth = 0 }) {
+function Comment({ comment: initial, postId, onDeleted, depth = 0, ancestorIds, targetCommentId }) {
   const { user } = useAuth();
   const [comment, setComment] = useState(initial);
   const [collapsed, setCollapsed] = useState(false);
-  const [showReplies, setShowReplies] = useState(depth < 2);
-  const [visibleCount, setVisibleCount] = useState(REPLY_FIRST);
+  const isAncestor = ancestorIds?.has?.(comment.id);
+  const [showReplies, setShowReplies] = useState(depth < 2 || !!isAncestor);
+  const [visibleCount, setVisibleCount] = useState(
+    isAncestor ? Math.max(REPLY_FIRST, (initial.replies?.length || 0)) : REPLY_FIRST
+  );
   const [replying, setReplying] = useState(false);
   const [replyBody, setReplyBody] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -131,6 +134,13 @@ function Comment({ comment: initial, postId, onDeleted, depth = 0 }) {
       setConfirmingDelete(false);
     }
   };
+
+  useEffect(() => {
+    if (isAncestor) {
+      setShowReplies(true);
+      setVisibleCount((v) => Math.max(v, (comment.replies?.length || 0)));
+    }
+  }, [isAncestor, comment.replies?.length]);
 
   if (deleted) return null;
 
@@ -170,8 +180,10 @@ function Comment({ comment: initial, postId, onDeleted, depth = 0 }) {
     setComment((c) => ({ ...c, replies: (c.replies || []).filter((r) => r.id !== replyId) }));
   };
 
+  const isTarget = comment.id === targetCommentId;
+
   return (
-    <div className="flex gap-2">
+    <div id={`comment-${comment.id}`} className="flex gap-2 scroll-mt-20 transition-shadow duration-500" style={isTarget ? { outline: '2px solid #ff6b35', outlineOffset: '6px', borderRadius: '8px' } : undefined}>
       {/* Thread line + collapse button */}
       <div className="flex flex-col items-center pt-1 shrink-0">
         <button
@@ -294,6 +306,8 @@ function Comment({ comment: initial, postId, onDeleted, depth = 0 }) {
                         postId={postId}
                         depth={depth + 1}
                         onDeleted={handleDeleteReply}
+                        ancestorIds={ancestorIds}
+                        targetCommentId={targetCommentId}
                       />
                     ))}
 
@@ -335,9 +349,21 @@ function Comment({ comment: initial, postId, onDeleted, depth = 0 }) {
   );
 }
 
+function findCommentPath(tree, targetId, path = []) {
+  for (const c of tree || []) {
+    if (String(c.id) === String(targetId)) return [...path, c.id];
+    if (c.replies && c.replies.length) {
+      const found = findCommentPath(c.replies, targetId, [...path, c.id]);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
 export default function PostDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
   const { data: post, loading: loadingPost, setData: setPost } = useApi(`/posts/${id}`);
   const { data: commentsData, loading: loadingComments, setData: setCommentsData } = useApi(`/posts/${id}/comments`);
@@ -348,6 +374,7 @@ export default function PostDetail() {
   const [mainVisibleCount, setMainVisibleCount] = useState(MAIN_PAGE_SIZE);
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [targetCommentId, setTargetCommentId] = useState(null);
   const menuRef = useRef(null);
 
   useEffect(() => {
@@ -406,6 +433,52 @@ export default function PostDetail() {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const rawComments = commentsData?.data || [];
+  const comments = useMemo(() => {
+    return [...rawComments].sort((a, b) => {
+      if (sort === 'Top') return (b.votes_sum_value || 0) - (a.votes_sum_value || 0);
+      return new Date(b.created_at) - new Date(a.created_at);
+    });
+  }, [rawComments, sort]);
+
+  const hashId = useMemo(() => {
+    const m = location.hash.match(/^#comment-(\w+)/);
+    return m ? m[1] : null;
+  }, [location.hash]);
+
+  const ancestorPath = useMemo(
+    () => (hashId ? findCommentPath(comments, hashId) : null),
+    [hashId, comments]
+  );
+  const ancestorIds = useMemo(
+    () => (ancestorPath ? new Set(ancestorPath) : null),
+    [ancestorPath]
+  );
+
+  useEffect(() => {
+    if (!ancestorPath || ancestorPath.length === 0) return;
+    const rootId = ancestorPath[0];
+    const idx = comments.findIndex((c) => String(c.id) === String(rootId));
+    if (idx >= 0 && idx >= mainVisibleCount) {
+      const next = Math.ceil((idx + 1) / MAIN_PAGE_SIZE) * MAIN_PAGE_SIZE;
+      setMainVisibleCount(next);
+    }
+  }, [ancestorPath, comments, mainVisibleCount]);
+
+  useEffect(() => {
+    if (!hashId || !ancestorPath) return;
+    setTargetCommentId(hashId);
+    const scrollTimer = setTimeout(() => {
+      const el = document.getElementById(`comment-${hashId}`);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 350);
+    const clearTimer = setTimeout(() => setTargetCommentId(null), 3200);
+    return () => {
+      clearTimeout(scrollTimer);
+      clearTimeout(clearTimer);
+    };
+  }, [hashId, ancestorPath]);
+
   if (loadingPost) {
     return (
       <div className="flex justify-center py-16">
@@ -421,13 +494,6 @@ export default function PostDetail() {
       </div>
     );
   }
-
-  const rawComments = commentsData?.data || [];
-  const comments = [...rawComments].sort((a, b) => {
-    if (sort === 'Top') return (b.votes_sum_value || 0) - (a.votes_sum_value || 0);
-    // New: terbaru di atas
-    return new Date(b.created_at) - new Date(a.created_at);
-  });
 
   return (
     <div className="space-y-4">
@@ -616,6 +682,8 @@ export default function PostDetail() {
                 comment={c}
                 postId={id}
                 depth={0}
+                ancestorIds={ancestorIds}
+                targetCommentId={targetCommentId}
                 onDeleted={(commentId) => {
                   setCommentsData({
                     ...commentsData,

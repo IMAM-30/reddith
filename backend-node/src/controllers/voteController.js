@@ -1,9 +1,52 @@
-const { Vote, Post, Comment } = require('../models');
+const { Vote, Post, Comment, User } = require('../models');
+const { createNotification, TYPES } = require('../utils/notification');
 
-async function toggleVote({ voteableType, voteableId, userId, value }) {
+async function notifyVote({ voteableType, voteableId, actor, value }) {
+  try {
+    if (voteableType === Vote.TYPE_POST) {
+      const post = await Post.findByPk(voteableId, {
+        attributes: ['id', 'user_id', 'title'],
+      });
+      if (!post || post.user_id === actor.id) return;
+      await createNotification({
+        userId: post.user_id,
+        type: TYPES.VOTE_POST,
+        data: {
+          actor: { id: actor.id, username: actor.username, avatar: actor.avatar },
+          post_id: post.id,
+          post_title: post.title,
+          value,
+        },
+      });
+    } else if (voteableType === Vote.TYPE_COMMENT) {
+      const comment = await Comment.findByPk(voteableId, {
+        attributes: ['id', 'user_id', 'post_id', 'body'],
+      });
+      if (!comment || comment.user_id === actor.id) return;
+      const excerpt = (comment.body || '').slice(0, 80);
+      await createNotification({
+        userId: comment.user_id,
+        type: TYPES.VOTE_COMMENT,
+        data: {
+          actor: { id: actor.id, username: actor.username, avatar: actor.avatar },
+          post_id: comment.post_id,
+          comment_id: comment.id,
+          comment_excerpt: excerpt,
+          value,
+        },
+      });
+    }
+  } catch (err) {
+    console.error('notifyVote error:', err.message);
+  }
+}
+
+async function toggleVote({ voteableType, voteableId, actor, value }) {
   const existing = await Vote.findOne({
-    where: { user_id: userId, voteable_type: voteableType, voteable_id: voteableId },
+    where: { user_id: actor.id, voteable_type: voteableType, voteable_id: voteableId },
   });
+
+  let shouldNotify = false;
 
   if (existing) {
     if (existing.value === parseInt(value)) {
@@ -16,13 +59,19 @@ async function toggleVote({ voteableType, voteableId, userId, value }) {
     }
     existing.value = parseInt(value);
     await existing.save();
+    shouldNotify = true;
   } else {
     await Vote.create({
-      user_id: userId,
+      user_id: actor.id,
       voteable_type: voteableType,
       voteable_id: voteableId,
       value: parseInt(value),
     });
+    shouldNotify = true;
+  }
+
+  if (shouldNotify) {
+    await notifyVote({ voteableType, voteableId, actor, value: parseInt(value) });
   }
 
   const score =
@@ -47,7 +96,7 @@ async function votePost(req, res) {
     const result = await toggleVote({
       voteableType: Vote.TYPE_POST,
       voteableId: post.id,
-      userId: req.user.id,
+      actor: req.user,
       value,
     });
     return res.json(result);
@@ -73,7 +122,7 @@ async function voteComment(req, res) {
     const result = await toggleVote({
       voteableType: Vote.TYPE_COMMENT,
       voteableId: comment.id,
-      userId: req.user.id,
+      actor: req.user,
       value,
     });
     return res.json(result);

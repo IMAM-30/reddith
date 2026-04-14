@@ -1,6 +1,7 @@
 const { Op, fn, col } = require('sequelize');
 const { Comment, Post, User, Vote } = require('../models');
 const { assetUrl } = require('../utils/asset');
+const { createNotification, TYPES } = require('../utils/notification');
 
 // Single-comment enrich (dipakai store endpoint)
 async function transformComment(c, userId = null) {
@@ -146,6 +147,45 @@ async function store(req, res) {
       parent_id: parent_id || null,
       body,
     });
+
+    const actor = {
+      id: req.user.id,
+      username: req.user.username,
+      avatar: req.user.avatar,
+    };
+    const excerpt = (body || '').slice(0, 120);
+
+    if (parent_id) {
+      const parent = await Comment.findByPk(parent_id, {
+        attributes: ['id', 'user_id'],
+      });
+      if (parent && parent.user_id !== req.user.id) {
+        await createNotification({
+          userId: parent.user_id,
+          type: TYPES.REPLY_COMMENT,
+          data: {
+            actor,
+            post_id: post.id,
+            post_title: post.title,
+            parent_comment_id: parent.id,
+            comment_id: comment.id,
+            body: excerpt,
+          },
+        });
+      }
+    } else if (post.user_id !== req.user.id) {
+      await createNotification({
+        userId: post.user_id,
+        type: TYPES.COMMENT_POST,
+        data: {
+          actor,
+          post_id: post.id,
+          post_title: post.title,
+          comment_id: comment.id,
+          body: excerpt,
+        },
+      });
+    }
 
     const full = await Comment.findByPk(comment.id, {
       include: [

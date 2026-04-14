@@ -62,8 +62,13 @@ router.post('/comments/:id/vote', authRequired, vote.voteComment);
 
 // Notifications
 router.get('/notifications', authRequired, notification.index);
+router.get('/notifications/unread-count', authRequired, notification.unreadCount);
 router.patch('/notifications/read-all', authRequired, notification.markAllAsRead);
+router.patch('/notifications/batch-read', authRequired, notification.batchRead);
 router.patch('/notifications/:id/read', authRequired, notification.markAsRead);
+router.delete('/notifications/clear-all', authRequired, notification.destroyAll);
+router.delete('/notifications/batch', authRequired, notification.batchDestroy);
+router.delete('/notifications/:id', authRequired, notification.destroy);
 
 // Profile
 router.post('/update-avatar', authRequired, uploadAvatar, user.updateAvatar);
