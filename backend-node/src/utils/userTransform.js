@@ -1,8 +1,9 @@
-const { Op, fn, col } = require('sequelize');
+const { Op } = require('sequelize');
 const { assetUrl } = require('./asset');
 const { Vote, Post, Comment } = require('../models');
 
 // Versi batch — hitung karma untuk banyak user dalam beberapa query saja.
+// Self-vote (user vote post/komen milik sendiri) tidak dihitung.
 // Return Map<userId, karma>.
 async function calculateKarmaBatch(userIds) {
   const result = new Map(userIds.map((id) => [id, 0]));
@@ -13,21 +14,22 @@ async function calculateKarmaBatch(userIds) {
     Comment.findAll({ where: { user_id: { [Op.in]: userIds } }, attributes: ['id', 'user_id'], raw: true }),
   ]);
 
-  const postOwner = new Map(posts.map((p) => [p.id, p.user_id]));
-  const commentOwner = new Map(comments.map((c) => [c.id, c.user_id]));
+  const postOwner = new Map(posts.map((p) => [parseInt(p.id), parseInt(p.user_id)]));
+  const commentOwner = new Map(comments.map((c) => [parseInt(c.id), parseInt(c.user_id)]));
 
   const tasks = [];
   if (posts.length) {
     tasks.push(
       Vote.findAll({
         where: { voteable_type: Vote.TYPE_POST, voteable_id: { [Op.in]: [...postOwner.keys()] } },
-        attributes: ['voteable_id', [fn('SUM', col('value')), 'total']],
-        group: ['voteable_id'],
+        attributes: ['voteable_id', 'value', 'user_id'],
         raw: true,
       }).then((rows) => {
         rows.forEach((r) => {
-          const uid = postOwner.get(parseInt(r.voteable_id));
-          if (uid != null) result.set(uid, (result.get(uid) || 0) + parseInt(r.total));
+          const ownerId = postOwner.get(parseInt(r.voteable_id));
+          if (ownerId == null) return;
+          if (parseInt(r.user_id) === ownerId) return; // skip self-vote
+          result.set(ownerId, (result.get(ownerId) || 0) + parseInt(r.value));
         });
       })
     );
@@ -36,13 +38,14 @@ async function calculateKarmaBatch(userIds) {
     tasks.push(
       Vote.findAll({
         where: { voteable_type: Vote.TYPE_COMMENT, voteable_id: { [Op.in]: [...commentOwner.keys()] } },
-        attributes: ['voteable_id', [fn('SUM', col('value')), 'total']],
-        group: ['voteable_id'],
+        attributes: ['voteable_id', 'value', 'user_id'],
         raw: true,
       }).then((rows) => {
         rows.forEach((r) => {
-          const uid = commentOwner.get(parseInt(r.voteable_id));
-          if (uid != null) result.set(uid, (result.get(uid) || 0) + parseInt(r.total));
+          const ownerId = commentOwner.get(parseInt(r.voteable_id));
+          if (ownerId == null) return;
+          if (parseInt(r.user_id) === ownerId) return; // skip self-vote
+          result.set(ownerId, (result.get(ownerId) || 0) + parseInt(r.value));
         });
       })
     );
@@ -51,7 +54,8 @@ async function calculateKarmaBatch(userIds) {
   return result;
 }
 
-// Hitung karma user (sum value vote di semua post & comment yang dia tulis)
+// Hitung karma user — sum vote di post & comment dia tulis,
+// tidak termasuk vote yang dia berikan ke diri sendiri.
 async function calculateKarma(userId) {
   const postIds = (
     await Post.findAll({ where: { user_id: userId }, attributes: ['id'] })
@@ -66,7 +70,11 @@ async function calculateKarma(userId) {
   if (postIds.length) {
     postKarma =
       (await Vote.sum('value', {
-        where: { voteable_type: Vote.TYPE_POST, voteable_id: { [Op.in]: postIds } },
+        where: {
+          voteable_type: Vote.TYPE_POST,
+          voteable_id: { [Op.in]: postIds },
+          user_id: { [Op.ne]: userId },
+        },
       })) || 0;
   }
   if (commentIds.length) {
@@ -75,6 +83,7 @@ async function calculateKarma(userId) {
         where: {
           voteable_type: Vote.TYPE_COMMENT,
           voteable_id: { [Op.in]: commentIds },
+          user_id: { [Op.ne]: userId },
         },
       })) || 0;
   }

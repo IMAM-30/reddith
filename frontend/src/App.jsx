@@ -10,6 +10,7 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import Communities from './pages/Communities';
 import CommunityDetail from './pages/CommunityDetail';
+import CommunityManage from './pages/CommunityManage';
 import CreateCommunity from './pages/CreateCommunity';
 import CreatePost from './pages/CreatePost';
 import PostDetail from './pages/PostDetail';
@@ -32,6 +33,7 @@ export default function App() {
             <Route path="/" element={<Home />} />
             <Route path="/popular" element={<Popular />} />
             <Route path="/r/:slug" element={<CommunityDetail />} />
+            <Route path="/r/:slug/manage" element={<ProtectedRoute><CommunityManage /></ProtectedRoute>} />
             <Route path="/post/:id" element={<PostDetail />} />
             <Route path="/user/:username" element={<UserProfile />} />
             <Route path="/profile/:id" element={<ProfilePage />} />

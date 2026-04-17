@@ -2,12 +2,19 @@ const { Op, fn, col } = require('sequelize');
 const {
   Post,
   Community,
+  CommunityUser,
   User,
   Comment,
   Vote,
 } = require('../models');
 const { assetUrl } = require('../utils/asset');
 const { relativePathFromFile, deleteStorageFile } = require('../middleware/upload');
+const { createNotification, TYPES } = require('../utils/notification');
+const {
+  getBlockedPrivateCommunityIds,
+  postAccessWhere,
+  canAccessCommunity,
+} = require('../utils/communityAccess');
 
 async function withCounts(post, userId = null) {
   if (!post) return null;
@@ -85,7 +92,7 @@ async function paginatePosts(where, page, userId = null) {
     where,
     include: [
       { model: User, as: 'user', attributes: ['id', 'name', 'username', 'avatar'] },
-      { model: Community, as: 'community', attributes: ['id', 'name', 'slug'] },
+      { model: Community, as: 'community', attributes: ['id', 'name', 'slug', 'icon'] },
     ],
     order: [['created_at', 'DESC']],
     limit: perPage,
@@ -108,7 +115,9 @@ async function paginatePosts(where, page, userId = null) {
 
 async function index(req, res) {
   try {
-    const result = await paginatePosts({}, req.query.page, req.user?.id || null);
+    const userId = req.user?.id || null;
+    const blocked = await getBlockedPrivateCommunityIds(userId);
+    const result = await paginatePosts(postAccessWhere(blocked), req.query.page, userId);
     return res.json(result);
   } catch (err) {
     console.error(err);
@@ -122,7 +131,23 @@ async function byCommunity(req, res) {
     if (!community)
       return res.status(404).json({ message: 'Community tidak ditemukan.' });
 
-    const result = await paginatePosts({ community_id: community.id }, req.query.page, req.user?.id || null);
+    const userId = req.user?.id || null;
+    const allowed = await canAccessCommunity(community, userId);
+    if (!allowed) {
+      return res.status(403).json({
+        message: 'Community ini privat. Bergabung untuk melihat post.',
+        restricted: true,
+        current_page: 1,
+        data: [],
+        from: null,
+        to: null,
+        last_page: 1,
+        per_page: 15,
+        total: 0,
+      });
+    }
+
+    const result = await paginatePosts({ community_id: community.id }, req.query.page, userId);
     return res.json(result);
   } catch (err) {
     console.error(err);
@@ -135,10 +160,21 @@ async function show(req, res) {
     const post = await Post.findByPk(req.params.id, {
       include: [
         { model: User, as: 'user', attributes: ['id', 'name', 'username', 'avatar'] },
-        { model: Community, as: 'community', attributes: ['id', 'name', 'slug'] },
+        { model: Community, as: 'community', attributes: ['id', 'name', 'slug', 'icon'] },
       ],
     });
     if (!post) return res.status(404).json({ message: 'Post tidak ditemukan.' });
+
+    if (post.community_id) {
+      const community = await Community.findByPk(post.community_id);
+      const allowed = await canAccessCommunity(community, req.user?.id || null);
+      if (!allowed) {
+        return res.status(403).json({
+          message: 'Post ini berada di community privat. Bergabung untuk melihat.',
+          restricted: true,
+        });
+      }
+    }
 
     const result = await withCounts(post, req.user?.id || null);
     return res.json(result);
@@ -182,9 +218,39 @@ async function store(req, res) {
     const full = await Post.findByPk(post.id, {
       include: [
         { model: User, as: 'user', attributes: ['id', 'name', 'username', 'avatar'] },
-        { model: Community, as: 'community', attributes: ['id', 'name', 'slug'] },
+        { model: Community, as: 'community', attributes: ['id', 'name', 'slug', 'icon'] },
       ],
     });
+
+    if (resolvedCommunityId) {
+      const members = await CommunityUser.findAll({
+        where: {
+          community_id: resolvedCommunityId,
+          status: 'active',
+          user_id: { [Op.ne]: req.user.id },
+        },
+        attributes: ['user_id'],
+        raw: true,
+      });
+      const actor = { id: req.user.id, username: req.user.username, avatar: req.user.avatar };
+      const community = full.community;
+      await Promise.all(
+        members.map((m) =>
+          createNotification({
+            userId: m.user_id,
+            type: TYPES.COMMUNITY_POST,
+            data: {
+              actor,
+              community_id: community.id,
+              community_slug: community.slug,
+              community_name: community.name,
+              post_id: post.id,
+              post_title: title,
+            },
+          })
+        )
+      );
+    }
 
     const result = await withCounts(full);
     return res.status(201).json(result);

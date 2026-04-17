@@ -11,6 +11,7 @@ const CommunityUser = sequelize.define(
     },
     community_id: { type: DataTypes.BIGINT.UNSIGNED, allowNull: false },
     user_id: { type: DataTypes.BIGINT.UNSIGNED, allowNull: false },
+    status: { type: DataTypes.ENUM('active', 'pending'), allowNull: false, defaultValue: 'active' },
   },
   {
     tableName: 'community_user',

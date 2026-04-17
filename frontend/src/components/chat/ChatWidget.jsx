@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
 
@@ -321,7 +322,18 @@ export default function ChatWidget({ open, onClose, onUnreadChange }) {
                   <Avatar url={thread.user?.avatar_url} username={thread.user?.username} size="sm" />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-medium truncate" style={{ color: 'var(--text-primary)' }}>{thread.user?.username}</span>
+                      {thread.user?.username ? (
+                        <Link
+                          to={`/user/${thread.user.username}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="text-xs font-medium truncate hover:underline hover:text-orange-500"
+                          style={{ color: 'var(--text-primary)' }}
+                        >
+                          {thread.user.username}
+                        </Link>
+                      ) : (
+                        <span className="text-xs font-medium truncate" style={{ color: 'var(--text-primary)' }}>{thread.user?.username}</span>
+                      )}
                       {thread.last_message && <span className="text-[10px] shrink-0 ml-1" style={{ color: 'var(--text-faint)' }}>{timeShort(thread.last_message.created_at)}</span>}
                     </div>
                     <div className="flex items-center gap-1">
@@ -383,7 +395,13 @@ export default function ChatWidget({ open, onClose, onUnreadChange }) {
               <div className="flex items-center justify-between px-3 h-10 shrink-0" style={{ borderBottom: '1px solid var(--border-color)' }}>
                 <div className="flex items-center gap-2">
                   <Avatar url={activeThread.avatar_url} username={activeThread.username} size="xs" />
-                  <span className="font-semibold text-xs" style={{ color: 'var(--text-primary)' }}>{activeThread.username}</span>
+                  <Link
+                    to={`/user/${activeThread.username}`}
+                    className="font-semibold text-xs hover:underline hover:text-orange-500"
+                    style={{ color: 'var(--text-primary)' }}
+                  >
+                    {activeThread.username}
+                  </Link>
                 </div>
                 <div className="flex items-center gap-1">
                   <button onClick={() => setConfirmDel({ kind: 'thread', user: activeThread })} className="w-6 h-6 rounded-full flex items-center justify-center" style={{ color: 'var(--text-muted)' }} title="Hapus percakapan">
@@ -426,8 +444,8 @@ export default function ChatWidget({ open, onClose, onUnreadChange }) {
                               <div
                                 className="px-2.5 py-1.5 rounded-2xl shadow-sm"
                                 style={{
-                                  backgroundColor: isMine ? '#dcf8c6' : 'var(--bg-card)',
-                                  color: '#111',
+                                  backgroundColor: isMine ? '#ff6b35' : 'var(--bg-input)',
+                                  color: isMine ? '#fff' : 'var(--text-primary)',
                                   width: 'fit-content',
                                   maxWidth: '100%',
                                   borderTopRightRadius: isMine ? '4px' : undefined,
@@ -435,16 +453,24 @@ export default function ChatWidget({ open, onClose, onUnreadChange }) {
                                 }}
                               >
                                 {msg.reply_to && (
-                                  <div className="mb-1 px-2 py-1 rounded-md text-[11px]" style={{ borderLeft: '3px solid #ff6b35', backgroundColor: 'rgba(0,0,0,0.05)' }}>
-                                    <div className="font-semibold text-orange-600">{msg.reply_to.sender_id === user.id ? 'You' : activeThread.username}</div>
+                                  <div
+                                    className="mb-1 px-2 py-1 rounded-md text-[11px]"
+                                    style={{
+                                      borderLeft: `3px solid ${isMine ? '#fff' : '#ff6b35'}`,
+                                      backgroundColor: isMine ? 'rgba(255,255,255,0.15)' : 'rgba(255,107,53,0.08)',
+                                    }}
+                                  >
+                                    <div className="font-semibold" style={{ color: isMine ? '#fff' : '#ff6b35' }}>
+                                      {msg.reply_to.sender_id === user.id ? 'You' : activeThread.username}
+                                    </div>
                                     <div className="truncate opacity-80">{msg.reply_to.body}</div>
                                   </div>
                                 )}
                                 <p className="text-xs leading-snug whitespace-pre-wrap break-words">{msg.body}</p>
                                 <div className="flex items-center justify-end gap-0.5 mt-0.5">
-                                  <span className="text-[9px] text-gray-500">{timeOnly(msg.created_at)}</span>
+                                  <span className="text-[9px]" style={{ color: isMine ? 'rgba(255,255,255,0.75)' : 'var(--text-faint)' }}>{timeOnly(msg.created_at)}</span>
                                   {isMine && (
-                                    <svg className={`w-3 h-3 ${isRead ? 'text-blue-500' : 'text-gray-500'}`} viewBox="0 0 16 16" fill="none">
+                                    <svg className="w-3 h-3" style={{ color: isRead ? '#60a5fa' : 'rgba(255,255,255,0.75)' }} viewBox="0 0 16 16" fill="none">
                                       <path d="M1 8 L5 12 L11 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                                       <path d="M5 8 L9 12 L15 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                                     </svg>

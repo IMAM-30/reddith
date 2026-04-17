@@ -12,6 +12,7 @@ export default function CreatePost() {
   const [preview, setPreview] = useState(null);
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
+  const [confirming, setConfirming] = useState(false);
 
   useEffect(() => {
     api.get('/my-communities').then((res) => setCommunities(res.data || [])).catch(() => {});
@@ -35,8 +36,16 @@ export default function CreatePost() {
     }
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
+    if (!form.title.trim()) {
+      setErrors({ title: ['Title required.'] });
+      return;
+    }
+    setConfirming(true);
+  };
+
+  const confirmCreate = async () => {
     setErrors({});
     setLoading(true);
 
@@ -47,12 +56,14 @@ export default function CreatePost() {
     if (form.image) formData.append('image', form.image);
 
     try {
-      const res = await api.post('/posts', formData, {
+      await api.post('/posts', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
-      navigate(`/post/${res.data.id}`);
+      setConfirming(false);
+      navigate('/');
     } catch (err) {
       setErrors(err.response?.data?.errors || {});
+      setConfirming(false);
     } finally {
       setLoading(false);
     }
@@ -166,6 +177,52 @@ export default function CreatePost() {
           </button>
         </form>
       </div>
+
+      {confirming && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
+          onClick={() => !loading && setConfirming(false)}
+        >
+          <div
+            className="rounded-xl p-5 max-w-sm w-full"
+            style={cardStyle}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="font-semibold text-base mb-1" style={{ color: 'var(--text-primary)' }}>
+              Publikasikan post?
+            </h3>
+            <p className="text-sm mb-3" style={{ color: 'var(--text-muted)' }}>
+              Post akan langsung muncul di feed.
+            </p>
+            <div className="rounded-lg px-3 py-2 mb-4" style={{ backgroundColor: 'var(--bg-input)' }}>
+              <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>{form.title}</p>
+              {form.community_id && (
+                <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                  di r/{communities.find((c) => String(c.id) === String(form.community_id))?.name}
+                </p>
+              )}
+            </div>
+            <div className="flex items-center justify-end gap-2">
+              <button
+                onClick={() => setConfirming(false)}
+                disabled={loading}
+                className="px-4 py-1.5 text-sm font-medium rounded-full"
+                style={{ color: 'var(--text-secondary)' }}
+              >
+                Batal
+              </button>
+              <button
+                onClick={confirmCreate}
+                disabled={loading}
+                className="px-4 py-1.5 text-sm font-medium rounded-full bg-orange-500 text-white hover:bg-orange-600 disabled:opacity-50 transition-colors"
+              >
+                {loading ? 'Memposting...' : 'Publikasikan'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

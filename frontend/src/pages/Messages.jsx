@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
 
@@ -181,7 +182,18 @@ export default function Messages() {
                   <Avatar url={thread.user?.avatar_url} username={thread.user?.username} size="sm" />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>{thread.user?.username}</span>
+                      {thread.user?.username ? (
+                        <Link
+                          to={`/user/${thread.user.username}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="text-sm font-medium truncate hover:underline hover:text-orange-500"
+                          style={{ color: 'var(--text-primary)' }}
+                        >
+                          {thread.user.username}
+                        </Link>
+                      ) : (
+                        <span className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>{thread.user?.username}</span>
+                      )}
                       {thread.last_message && (
                         <span className="text-[10px] shrink-0 ml-2" style={{ color: 'var(--text-faint)' }}>{timeShort(thread.last_message.created_at)}</span>
                       )}
@@ -270,7 +282,13 @@ export default function Messages() {
             <div className="flex items-center justify-between px-4 h-12 shrink-0" style={{ borderBottom: '1px solid var(--border-color)' }}>
               <div className="flex items-center gap-3">
                 <Avatar url={activeThread.avatar_url} username={activeThread.username} size="md" />
-                <span className="font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>{activeThread.username}</span>
+                <Link
+                  to={`/user/${activeThread.username}`}
+                  className="font-semibold text-sm hover:underline hover:text-orange-500"
+                  style={{ color: 'var(--text-primary)' }}
+                >
+                  {activeThread.username}
+                </Link>
               </div>
               <button
                 onClick={() => deleteThread(activeThread)}
@@ -295,7 +313,13 @@ export default function Messages() {
                     <div className="flex justify-center mb-2">
                       <Avatar url={activeThread.avatar_url} username={activeThread.username} size="lg" />
                     </div>
-                    <p className="font-semibold" style={{ color: 'var(--text-primary)' }}>{activeThread.username}</p>
+                    <Link
+                      to={`/user/${activeThread.username}`}
+                      className="font-semibold hover:underline hover:text-orange-500"
+                      style={{ color: 'var(--text-primary)' }}
+                    >
+                      {activeThread.username}
+                    </Link>
                     <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Redditor · {activeThread.karma ?? 0} karma</p>
                   </div>
 

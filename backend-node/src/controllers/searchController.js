@@ -2,6 +2,7 @@ const { Op } = require('sequelize');
 const { Post, Community, User, CommunityUser, Vote } = require('../models');
 const { assetUrl } = require('../utils/asset');
 const { calculateKarmaBatch } = require('../utils/userTransform');
+const { getBlockedPrivateCommunityIds, postAccessWhere } = require('../utils/communityAccess');
 
 async function search(req, res) {
   try {
@@ -14,12 +15,19 @@ async function search(req, res) {
     }
 
     const like = { [Op.like]: `%${q}%` };
+    const userId = req.user?.id || null;
+    const blocked = await getBlockedPrivateCommunityIds(userId);
+    const accessWhere = postAccessWhere(blocked);
+    const textWhere = { [Op.or]: [{ title: like }, { body: like }] };
+    const postWhere = accessWhere[Op.or]
+      ? { [Op.and]: [textWhere, accessWhere] }
+      : textWhere;
 
     const posts = await Post.findAll({
-      where: { [Op.or]: [{ title: like }, { body: like }] },
+      where: postWhere,
       include: [
         { model: User, as: 'user', attributes: ['id', 'name', 'username', 'avatar'] },
-        { model: Community, as: 'community', attributes: ['id', 'name', 'slug'] },
+        { model: Community, as: 'community', attributes: ['id', 'name', 'slug', 'icon'] },
       ],
       order: [['created_at', 'DESC']],
       limit: 20,

@@ -7,6 +7,7 @@ const {
   deleteStorageFile,
 } = require('../middleware/upload');
 const { batchEnrich } = require('./postController');
+const { getBlockedPrivateCommunityIds, postAccessWhere } = require('../utils/communityAccess');
 
 async function show(req, res) {
   try {
@@ -114,10 +115,18 @@ async function userPosts(req, res) {
     const perPage = 15;
     const offset = (page - 1) * perPage;
 
+    const viewerId = req.user?.id || null;
+    const blocked = await getBlockedPrivateCommunityIds(viewerId);
+    const accessWhere = postAccessWhere(blocked);
+    const baseWhere = { user_id: user.id };
+    const where = accessWhere[Op.or]
+      ? { [Op.and]: [baseWhere, accessWhere] }
+      : baseWhere;
+
     const { rows, count } = await Post.findAndCountAll({
-      where: { user_id: user.id },
+      where,
       include: [
-        { model: Community, as: 'community', attributes: ['id', 'name', 'slug'] },
+        { model: Community, as: 'community', attributes: ['id', 'name', 'slug', 'icon'] },
         { model: User, as: 'user', attributes: ['id', 'name', 'username', 'avatar'] },
       ],
       order: [['created_at', 'DESC']],

@@ -25,14 +25,14 @@ router.post('/login', auth.login);
 router.get('/posts', authOptional, post.index);
 router.get('/posts/:id', authOptional, post.show);
 
-router.get('/communities', community.index);
+router.get('/communities', authOptional, community.index);
 router.get('/my-communities', authRequired, community.myCommunities);
 router.get('/communities/:slug', authOptional, community.show);
 router.get('/communities/:slug/posts', authOptional, post.byCommunity);
 
 router.get('/posts/:id/comments', authOptional, comment.index);
 
-router.get('/search', search.search);
+router.get('/search', authOptional, search.search);
 
 router.get('/profile/:id', user.profile);
 router.get('/users/:username', user.show);
@@ -47,6 +47,14 @@ router.get('/me', authRequired, auth.me);
 router.post('/communities', authRequired, uploadCommunityIcon, community.store);
 router.post('/communities/:slug/join', authRequired, community.join);
 router.delete('/communities/:slug/leave', authRequired, community.leave);
+
+// Community owner actions
+router.patch('/communities/:slug/settings', authRequired, uploadCommunityIcon, community.updateSettings);
+router.get('/communities/:slug/members', authRequired, community.members);
+router.get('/communities/:slug/requests', authRequired, community.requests);
+router.post('/communities/:slug/requests/:userId/approve', authRequired, community.approveRequest);
+router.post('/communities/:slug/requests/:userId/reject', authRequired, community.rejectRequest);
+router.delete('/communities/:slug/members/:userId', authRequired, community.kickMember);
 
 // Posts
 router.post('/posts', authRequired, uploadPostImage, post.store);

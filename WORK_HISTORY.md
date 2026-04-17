@@ -4,13 +4,18 @@ Catatan progres pengerjaan proyek. Baca bagian **Last Update** paling atas untuk
 
 ---
 
-## Last Update — 2026-04-13
+## Last Update — 2026-04-14
 
 ### Status Proyek
-✅ **Backend sudah 100% migrasi dari Laravel ke Node.js + Express + Sequelize**
-✅ **Fitur postingan & komentar sudah di-overhaul** — community opsional, threading rekursif, pagination, sorting
-✅ **Bug join community sudah fixed** — status membership persisten setelah reload
-✅ Branch aktif: `postingan-part` (belum di-merge ke `master`)
+✅ **Backend 100% Node.js + Express + Sequelize** (Laravel sudah dihapus sejak 2026-04-07)
+✅ **Fitur Notification overhauled** — 9 tipe notif, grouping client-side, badge polling, mark/delete batch
+✅ **Fitur Community overhauled** — private/public, min karma gate, owner management panel (settings/members/requests), notif join/request/approved/rejected/new post
+✅ **Login multi-identifier** — email / username / NIM
+✅ **Eye-toggle password** — di Login + Register
+✅ **Search user** — dengan karma, konektivitas karma sudah konsisten
+✅ **Bug blank page community & post DETAIL fixed** — Rules of Hooks violation (hooks setelah early return)
+✅ **Bug join persistence fixed** — `is_member` konsisten di semua endpoint, ProfileSidebar path typo fixed
+🌿 Branch aktif: `community-part` (belum commit, belum merge). Parent: `notification-part` (sudah 2 commits, belum merge ke master)
 
 ### Stack Final
 | Layer | Teknologi |
@@ -73,21 +78,180 @@ reddith/
 | 11 | Testing Jest/Mocha | ⬜ belum |
 
 ### Yang Belum Dikerjakan / TODO Berikutnya
+- ⬜ **Test menyeluruh di browser** — terutama fitur baru community (private flow, karma gate, manage panel, approve/reject requests, kick member) dan notification (grouping, scroll-to-comment)
+- ⬜ **Commit & merge branches** — `community-part` belum commit, `notification-part` belum merge ke `master`. Urutan: commit community-part → merge ke notification-part → merge ke master
+- ⬜ **Cleanup data testing** — 3 user `notif_a_*`, `notif_b_*`, `notif_c_*` + community `testcomm*` dari E2E backend test (bisa dihapus manual dari DB)
 - ⬜ **Testing dengan Jest/Mocha** (poin syarat #11) — opsional, untuk maksimalkan nilai
 - ⬜ **Deployment ke cloud** (poin syarat #10) — opsional. Saran: Railway / Render untuk backend, Vercel untuk frontend
-- ⬜ **Test menyeluruh di browser** — pastikan semua fitur (login, post, comment, vote, message, notification, avatar upload) jalan via UI
-- ⬜ **Merge branch `postingan-part` ke `master`** — setelah test di browser selesai
-- ⬜ **Verifikasi password user lama** — bcrypt `$2y$` (Laravel) vs `$2a$` (Node). Sudah ada normalisasi di [authController.js:60](backend-node/src/controllers/authController.js#L60), tapi belum 100% terverifikasi. Workaround: register user baru.
+- ⬜ **Verifikasi password user lama** — bcrypt `$2y$` (Laravel) vs `$2a$` (Node). Sudah ada normalisasi di [authController.js:56](backend-node/src/controllers/authController.js#L56), belum 100% terverifikasi. Workaround: register user baru.
 
 ### Catatan Penting
 - ⚠️ **Folder `backend/` Laravel sudah dihapus sepenuhnya** — tidak ada jalan kembali, semua data file sudah dipindah ke `backend-node/storage/`
 - ⚠️ **Polymorphic vote** (Opsi A) — tabel `votes` masih satu tabel dengan `voteable_type` + `voteable_id`. Sequelize tidak support polymorphic native, jadi relasi Vote↔Post/Comment dihandle manual di [voteController.js](backend-node/src/controllers/voteController.js)
-- ⚠️ **Database schema diubah**: `posts.community_id` sekarang `NULLABLE` — post tanpa community diperbolehkan
+- ⚠️ **Database schema diubah**: `posts.community_id` NULLABLE; `communities.visibility` ENUM('public','private'), `communities.min_karma` INT; `community_user.status` ENUM('active','pending'). Idempotent auto-migrate di [server.js](backend-node/server.js) saat startup.
 - ⚠️ **Branch utama: `master`** — bukan `main`. Tetap pakai `master`.
+- ⚠️ **Rules of Hooks** — pernah kena 2× (PostDetail & CommunityDetail). Pattern yang bikin blank page: `useState`/`useEffect` **setelah** `if (loading) return <spinner />`. Selalu letakkan semua hook di atas conditional return.
+- ⚠️ **Pragmatic approach** — Skill-FullStack-WebDeveloper.md dipakai sebagai soft guide, SYARAT_PROYEK.md sebagai hard constraint. Tidak migrasi Sequelize→Prisma, JS tetap (bukan TS), dst. Detail di `~/.claude/projects/.../memory/`.
 
 ---
 
 ## Riwayat Pengerjaan (Kronologis)
+
+### 2026-04-14 — Overhaul Notification, Karma/Password/Login, & Community
+
+**Konteks:** Hari penuh fitur besar. Dikerjakan di 2 branch baru: `notification-part` (sudah 2 commits), lalu `community-part` (belum commit).
+
+#### Sesi 1: Overhaul Notification — `notification-part` commit `171b154`
+
+**Backend**:
+- [utils/notification.js](backend-node/src/utils/notification.js) — helper `createNotification({ userId, type, data })` + konstanta TYPES (vote_post, vote_comment, comment_post, reply_comment)
+- [notificationController.js](backend-node/src/controllers/notificationController.js) — overhaul: parse `data` JSON di response + transform `actor.avatar_url`, tambah `unreadCount()`, `destroy()`, `destroyAll()`, `batchRead()`, `batchDestroy()` (max 200 IDs, scoped per-user)
+- [voteController.js](backend-node/src/controllers/voteController.js) — `toggleVote` fire notif saat vote baru / change direction. Skip unvote & skip self-vote. Actor info passed untuk avatar/username.
+- [commentController.js](backend-node/src/controllers/commentController.js) — `store()` fire notif: `reply_comment` kalau ada `parent_id`, `comment_post` kalau tidak. Skip self-action.
+- [routes/api.js](backend-node/src/routes/api.js) — 5 endpoint baru: `GET /unread-count`, `PATCH /batch-read`, `DELETE /batch`, `DELETE /:id`, `DELETE /clear-all`
+
+**Frontend**:
+- [hooks/useNotificationCount.js](frontend/src/hooks/useNotificationCount.js) — polling 10 detik unread count
+- [Notifications.jsx](frontend/src/pages/Notifications.jsx) — rewrite full:
+  - Client-side grouping by key: `vote_post:{post_id}:{value}`, `vote_comment:{comment_id}:{value}`, `comment_post:{post_id}`, `reply_comment:{parent_comment_id}` — ala Instagram/Twitter "u/A dan N lainnya"
+  - Stacked avatars (2 bertumpuk + count badge)
+  - Unread: gradient orange + red dot + bold; read: muted
+  - Click group → batch mark-read + navigate ke target (dari notif terbaru)
+  - Delete per-group dengan konfirmasi popup adaptif
+  - Empty state: bell icon + watermark ilustrasi opacity 6%
+- [Navbar.jsx](frontend/src/components/layout/Navbar.jsx) — bell icon + red badge unread count
+- [AppLayout.jsx](frontend/src/components/layout/AppLayout.jsx) — expose `setNotifCount` via `Outlet context` agar Notifications.jsx bisa sync badge real-time
+
+**Scroll-to-comment di PostDetail** (sebagai prasyarat notif yang navigate ke komentar spesifik):
+- [PostDetail.jsx](frontend/src/pages/PostDetail.jsx) — `useLocation().hash` parsed via `useMemo`, `findCommentPath()` compute ancestor IDs, Comment auto-expand replies jika ID-nya ada di ancestorIds, parent bump `mainVisibleCount` kalau root target di luar visible range, `scrollIntoView` + outline orange 3.2 detik
+
+**Bug fix tengah sesi**: blank page PostDetail karena Rules of Hooks violation (`useMemo`/`useEffect` setelah early return `if (loadingPost) return`). Pindahkan semua hooks ke atas conditional return.
+
+#### Sesi 2: Karma Audit, Password Eye-toggle, Login Multi-identifier — commit `856922a`
+
+**Audit karma**: `/me`, `/login`, `/register`, `/users/:username`, `/profile/:id`, `/messages/threads` semua sudah return karma konsisten. Gap: `/search` tidak ada user result. **Fix**: [searchController.js](backend-node/src/controllers/searchController.js) tambah query User (by username/name/nim) + `calculateKarmaBatch` → return `users[]` dengan karma. Frontend [Search.jsx](frontend/src/pages/Search.jsx) render section "People".
+
+**Password eye-toggle**:
+- [components/auth/PasswordInput.jsx](frontend/src/components/auth/PasswordInput.jsx) — komponen reusable, `forwardRef`, toggle button `tabIndex={-1}`, Heroicons eye/eye-off
+- Applied di [Login.jsx](frontend/src/pages/Login.jsx) dan [Register.jsx](frontend/src/pages/Register.jsx) (3 field total)
+
+**Login multi-identifier** (email/username/nim):
+- [authController.js login()](backend-node/src/controllers/authController.js) — accept `identifier` (fallback `email` untuk legacy), query `Op.or` ke 3 kolom. Error "Kredensial salah." generic (tidak bocor identifier exist/tidak)
+- [AuthContext.jsx](frontend/src/context/AuthContext.jsx) — `login(identifier, password)`
+- [Login.jsx](frontend/src/pages/Login.jsx) — state `identifier`, label "Email / Username / NIM"
+
+Test via curl: login email ✅, username ✅, NIM ✅, wrong password ✅, search users ✅.
+
+#### Sesi 3: Overhaul Community (biggest) — branch `community-part`, belum commit
+
+**Bug yang diperbaiki di awal**:
+1. **Blank page community** — Rules of Hooks violation di [CommunityDetail.jsx](frontend/src/pages/CommunityDetail.jsx) line 39-40 (`useState`/`useEffect` setelah `if (loadingCommunity) return`). Sama persis dengan PostDetail. Pindah semua hook ke atas.
+2. **Join persistence bug** — ternyata efek dari (1) + path typo `/community/:slug` di [ProfileSidebar.jsx:93](frontend/src/components/profile/ProfileSidebar.jsx#L93) → harus `/r/:slug` sesuai route di [App.jsx](frontend/src/App.jsx).
+
+**DB Migration idempotent** di [server.js](backend-node/server.js):
+```sql
+ALTER TABLE communities ADD COLUMN visibility ENUM('public','private') DEFAULT 'public';
+ALTER TABLE communities ADD COLUMN min_karma INT DEFAULT 0;
+ALTER TABLE community_user ADD COLUMN status ENUM('active','pending') DEFAULT 'active';
+```
+
+**Model update**: [Community.js](backend-node/src/models/Community.js), [CommunityUser.js](backend-node/src/models/CommunityUser.js).
+
+**Backend — [communityController.js](backend-node/src/controllers/communityController.js) rewrite**:
+- `index()` — batch query memberMap/postMap/myMembershipsMap (N+1 fix). Return `membership_status`, `is_member`, `is_owner` per item.
+- `show()` — `members_count` hanya count `status='active'`, include `membership_status`, `is_owner`.
+- `join()` — cek karma vs `min_karma` → 422 jika kurang. Public → `active` + notif `community_join` ke owner. Private → `pending` + notif `community_request`. Return `membership_status`, `is_member`.
+- `assertOwner()` helper.
+- Endpoint owner baru: `updateSettings` (visibility/min_karma/description), `members` (list + karma + joined_at + is_owner flag), `requests` (list pending), `approveRequest` + notif `community_approved`, `rejectRequest` + notif `community_rejected`, `kickMember`.
+- `leave()` — block owner (tidak bisa keluar dari community sendiri).
+- `userCommunities()` — include owned communities (union member+owner) + `is_owner` flag per item.
+
+**Notifikasi community** — 5 tipe baru di [utils/notification.js](backend-node/src/utils/notification.js) TYPES:
+- `community_join`, `community_request`, `community_approved`, `community_rejected`, `community_post`
+- [postController.js store()](backend-node/src/controllers/postController.js) — setelah post dibuat di community, fire notif ke semua active member kecuali author
+
+**Routes** — [api.js](backend-node/src/routes/api.js) tambah 6 endpoint owner:
+```
+PATCH  /communities/:slug/settings
+GET    /communities/:slug/members
+GET    /communities/:slug/requests
+POST   /communities/:slug/requests/:userId/approve
+POST   /communities/:slug/requests/:userId/reject
+DELETE /communities/:slug/members/:userId
+```
+
+**Frontend**:
+- [CommunityDetail.jsx](frontend/src/pages/CommunityDetail.jsx) rewrite — private badge di banner, min_karma stats, button state contextual (Join / Request / Pending / Joined / Manage untuk owner), error karma-insufficient, creator avatar + link, gradient banner
+- [Communities.jsx](frontend/src/pages/Communities.jsx) — hero gradient banner, search bar, filter pills (All/Joined/Owned), grid 2-kolom, hover lift + shadow, visibility badge + Owner/Joined/Pending badge
+- [CommunityManage.jsx](frontend/src/pages/CommunityManage.jsx) **NEW** — 3 tab (Settings/Members/Requests). Settings: visibility card chooser, min_karma input, description. Members: avatar + karma + joined date + tombol Keluarkan dengan popup konfirmasi. Requests: badge count di tab, tombol Setujui (green) / Tolak (red outline).
+- [CreateCommunity.jsx](frontend/src/pages/CreateCommunity.jsx) — 2 field baru visibility + min_karma
+- [ProfileSidebar.jsx](frontend/src/components/profile/ProfileSidebar.jsx) — community thumbnail icon, "Owner" badge, **gear icon Manage** muncul on-hover untuk community yang user miliki (isOwner && c.is_owner)
+- [Notifications.jsx](frontend/src/pages/Notifications.jsx) — render 5 tipe community baru di `renderGroup()` switch
+- [App.jsx](frontend/src/App.jsx) — route `/r/:slug/manage` (ProtectedRoute)
+
+**Backend E2E test via curl (✅ semua lulus)**: Create private community → B request join → A view requests → A approve → B show active → A view members → B post → A get community_post notif → B get community_approved notif → B leave.
+
+#### Sesi 4: Polishing — Confirmation Popup & Icon Cleanup
+
+**CreatePost** ([CreatePost.jsx](frontend/src/pages/CreatePost.jsx)):
+- Submit → popup konfirmasi dengan preview judul + community name
+- Klik Publikasikan → POST API → **navigate ke `/`** (home), bukan ke `/post/:id`. Post muncul di atas feed karena ORDER BY created_at DESC.
+- Klik Batal / backdrop → tutup, form tetap utuh
+
+**CreateCommunity** ([CreateCommunity.jsx](frontend/src/pages/CreateCommunity.jsx)):
+- Submit → popup preview `r/name` + visibility icon + min_karma (jika >0)
+- Klik Buat → navigate ke `/r/:slug` (community detail)
+
+**Icon cleanup** — ganti emoji 🌍 🔒 dengan SVG Heroicons di 5 lokasi:
+- [CommunityManage.jsx](frontend/src/pages/CommunityManage.jsx) visibility chooser
+- [CreateCommunity.jsx](frontend/src/pages/CreateCommunity.jsx) visibility chooser + popup preview
+- Sudah konsisten dengan `VisibilityBadge` di Communities.jsx yang sejak awal pakai SVG
+
+#### File yang Berubah Hari Ini (Ringkasan)
+
+**Backend (committed di notification-part)**:
+- `utils/notification.js` — helper + TYPES
+- `controllers/notificationController.js` — rewrite
+- `controllers/voteController.js` — hook notif
+- `controllers/commentController.js` — hook notif
+- `controllers/authController.js` — login multi-identifier
+- `controllers/searchController.js` — user search + karma
+- `routes/api.js` — endpoint notif baru
+
+**Backend (uncommitted di community-part)**:
+- `server.js` — migration idempotent
+- `models/Community.js`, `models/CommunityUser.js` — kolom baru
+- `controllers/communityController.js` — rewrite + owner endpoints
+- `controllers/postController.js` — notif community_post
+- `utils/notification.js` — 5 tipe baru
+- `routes/api.js` — 6 endpoint owner
+
+**Frontend (committed di notification-part)**:
+- `hooks/useNotificationCount.js` (NEW)
+- `pages/Notifications.jsx` — rewrite dengan grouping
+- `pages/PostDetail.jsx` — scroll-to-comment + fix hooks order
+- `pages/Login.jsx`, `pages/Register.jsx` — PasswordInput
+- `components/auth/PasswordInput.jsx` (NEW)
+- `pages/Search.jsx` — section People
+- `context/AuthContext.jsx` — identifier
+- `components/layout/Navbar.jsx`, `components/layout/AppLayout.jsx` — badge + outlet context
+
+**Frontend (uncommitted di community-part)**:
+- `App.jsx` — route manage
+- `pages/CommunityDetail.jsx` — rewrite + fix hooks
+- `pages/Communities.jsx` — hero + filter + grid
+- `pages/CommunityManage.jsx` (NEW)
+- `pages/CreateCommunity.jsx` — visibility + min_karma + popup
+- `pages/CreatePost.jsx` — popup + redirect ke home
+- `pages/Notifications.jsx` — render 5 tipe community
+- `components/profile/ProfileSidebar.jsx` — fix path `/r/`, owner gear icon
+
+#### Memory Files Dibuat
+
+- `memory/feedback_pragmatic_skill.md` — user prefer pragmatic interpretation Skill-FullStack, don't force infra overhauls
+- `memory/project_constraints.md` — SYARAT_PROYEK.md hard constraint (Sequelize/JWT/Express/MySQL non-negotiable). Decision hierarchy SYARAT > codebase > user > Skill.
+
+---
 
 ### 2026-04-13 — Overhaul Fitur Postingan & Komentar
 

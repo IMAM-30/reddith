@@ -1,5 +1,0 @@
-git switch -c nama-branch
-
-git checkout master
-git merge nama-branch
-git push origin master

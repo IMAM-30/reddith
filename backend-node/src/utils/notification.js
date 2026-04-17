@@ -5,6 +5,11 @@ const TYPES = {
   VOTE_COMMENT: 'vote_comment',
   COMMENT_POST: 'comment_post',
   REPLY_COMMENT: 'reply_comment',
+  COMMUNITY_JOIN: 'community_join',
+  COMMUNITY_REQUEST: 'community_request',
+  COMMUNITY_APPROVED: 'community_approved',
+  COMMUNITY_REJECTED: 'community_rejected',
+  COMMUNITY_POST: 'community_post',
 };
 
 async function createNotification({ userId, type, data }) {

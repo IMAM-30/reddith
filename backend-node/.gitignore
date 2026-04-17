@@ -1,4 +1,14 @@
 node_modules/
 .env
+.env.local
+.env.*.local
 *.log
 .DS_Store
+
+# Uploaded user content — tidak ikut repo
+storage/avatars/*
+storage/posts/*
+storage/communities/*
+!storage/avatars/.gitkeep
+!storage/posts/.gitkeep
+!storage/communities/.gitkeep

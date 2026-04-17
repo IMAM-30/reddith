@@ -88,23 +88,45 @@ export default function ProfileSidebar({ profile, isOwner = false }) {
           <p className="text-xs font-semibold tracking-wide uppercase mb-3" style={{ color: 'var(--text-muted)' }}>Communities</p>
           <div className="space-y-2">
             {communities.map((c) => (
-              <Link
-                key={c.id}
-                to={`/community/${c.slug}`}
-                className="flex items-center gap-2.5 p-2 rounded-lg transition-colors hover:opacity-80"
-                style={{ backgroundColor: 'var(--bg-input)' }}
-              >
-                <div
-                  className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0"
-                  style={{ background: 'linear-gradient(135deg, #ff6b35, #f7931e)' }}
+              <div key={c.id} className="group flex items-center gap-2 rounded-lg transition-colors hover:opacity-90" style={{ backgroundColor: 'var(--bg-input)' }}>
+                <Link
+                  to={`/r/${c.slug}`}
+                  className="flex items-center gap-2.5 p-2 flex-1 min-w-0"
                 >
-                  {c.name?.charAt(0).toUpperCase()}
-                </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>r/{c.name}</p>
-                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{c.members_count || 0} member</p>
-                </div>
-              </Link>
+                  {c.icon_url ? (
+                    <img src={c.icon_url} alt="" className="w-8 h-8 rounded-full object-cover shrink-0" />
+                  ) : (
+                    <div
+                      className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0"
+                      style={{ background: 'linear-gradient(135deg, #ff6b35, #f7931e)' }}
+                    >
+                      {c.name?.charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>r/{c.name}</p>
+                      {c.is_owner && (
+                        <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full shrink-0" style={{ backgroundColor: 'rgba(249,115,22,0.15)', color: '#ea580c' }}>Owner</span>
+                      )}
+                    </div>
+                    <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{c.members_count || 0} member</p>
+                  </div>
+                </Link>
+                {isOwner && c.is_owner && (
+                  <Link
+                    to={`/r/${c.slug}/manage`}
+                    className="w-8 h-8 mr-1 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                    style={{ color: 'var(--text-muted)' }}
+                    title="Manage community"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                  </Link>
+                )}
+              </div>
             ))}
           </div>
         </div>

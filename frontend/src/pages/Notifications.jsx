@@ -1,6 +1,19 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useOutletContext } from 'react-router-dom';
+import { Link, useNavigate, useOutletContext } from 'react-router-dom';
 import api from '../services/api';
+
+function UserLink({ username, children }) {
+  if (!username) return <strong>{children}</strong>;
+  return (
+    <Link
+      to={`/user/${username}`}
+      onClick={(e) => e.stopPropagation()}
+      className="hover:underline hover:text-orange-500"
+    >
+      <strong>{children}</strong>
+    </Link>
+  );
+}
 
 const cardStyle = { backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' };
 
@@ -76,6 +89,15 @@ function groupKeyOf(n) {
       return `cp:${d.post_id}`;
     case 'reply_comment':
       return `rc:${d.parent_comment_id || d.post_id}`;
+    case 'community_join':
+      return `cj:${d.community_id}`;
+    case 'community_request':
+      return `creq:${d.community_id}`;
+    case 'community_post':
+      return `cpost:${d.community_id}`;
+    case 'community_approved':
+    case 'community_rejected':
+      return `single:${n.id}`;
     default:
       return `single:${n.id}`;
   }
@@ -114,18 +136,19 @@ function uniqueActors(items) {
 }
 
 function actorLabel(actors, count) {
-  if (count <= 1) return <strong>u/{actors[0]?.username || 'seseorang'}</strong>;
+  if (count <= 1)
+    return <UserLink username={actors[0]?.username}>u/{actors[0]?.username || 'seseorang'}</UserLink>;
   if (count === 2)
     return (
       <>
-        <strong>u/{actors[0]?.username}</strong>{' '}
+        <UserLink username={actors[0]?.username}>u/{actors[0]?.username}</UserLink>{' '}
         <span style={{ color: 'var(--text-muted)' }}>dan</span>{' '}
-        <strong>u/{actors[1]?.username}</strong>
+        <UserLink username={actors[1]?.username}>u/{actors[1]?.username}</UserLink>
       </>
     );
   return (
     <>
-      <strong>u/{actors[0]?.username}</strong>{' '}
+      <UserLink username={actors[0]?.username}>u/{actors[0]?.username}</UserLink>{' '}
       <span style={{ color: 'var(--text-muted)' }}>dan</span>{' '}
       <strong>{count - 1} lainnya</strong>
     </>
@@ -209,6 +232,64 @@ function renderGroup(group) {
                 {d.body}
               </span>
             )}
+          </span>
+        ),
+      };
+    case 'community_join':
+      return {
+        target: d.community_slug ? `/r/${d.community_slug}/manage` : null,
+        node: (
+          <span>
+            {label}{' '}
+            <span style={{ color: 'var(--text-muted)' }}>bergabung ke community</span>{' '}
+            <em style={{ color: 'var(--text-primary)' }}>r/{d.community_name}</em>
+          </span>
+        ),
+      };
+    case 'community_request':
+      return {
+        target: d.community_slug ? `/r/${d.community_slug}/manage` : null,
+        node: (
+          <span>
+            {label}{' '}
+            <span style={{ color: 'var(--text-muted)' }}>minta bergabung ke community</span>{' '}
+            <em style={{ color: 'var(--text-primary)' }}>r/{d.community_name}</em>
+          </span>
+        ),
+      };
+    case 'community_post':
+      return {
+        target: d.post_id ? `/post/${d.post_id}` : (d.community_slug ? `/r/${d.community_slug}` : null),
+        node: (
+          <span>
+            {label}{' '}
+            <span style={{ color: 'var(--text-muted)' }}>memposting di</span>{' '}
+            <em style={{ color: 'var(--text-primary)' }}>r/{d.community_name}</em>
+            {d.post_title && count === 1 && (
+              <span className="block text-xs mt-1 line-clamp-1" style={{ color: 'var(--text-muted)' }}>"{d.post_title}"</span>
+            )}
+          </span>
+        ),
+      };
+    case 'community_approved':
+      return {
+        target: d.community_slug ? `/r/${d.community_slug}` : null,
+        node: (
+          <span>
+            <span style={{ color: 'var(--text-muted)' }}>Permintaanmu untuk bergabung ke</span>{' '}
+            <em style={{ color: 'var(--text-primary)' }}>r/{d.community_name}</em>{' '}
+            <span className="text-green-600 font-semibold">disetujui ✓</span>
+          </span>
+        ),
+      };
+    case 'community_rejected':
+      return {
+        target: d.community_slug ? `/r/${d.community_slug}` : null,
+        node: (
+          <span>
+            <span style={{ color: 'var(--text-muted)' }}>Permintaanmu untuk bergabung ke</span>{' '}
+            <em style={{ color: 'var(--text-primary)' }}>r/{d.community_name}</em>{' '}
+            <span className="text-red-600 font-semibold">ditolak</span>
           </span>
         ),
       };
