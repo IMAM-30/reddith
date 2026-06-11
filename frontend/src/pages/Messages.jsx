@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
+import { createPortal } from 'react-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
 
@@ -28,6 +29,70 @@ function Avatar({ url, username, size = 'sm' }) {
   );
 }
 
+function DeleteThreadModal({ target, loading = false, onCancel, onConfirm }) {
+  if (!target) return null;
+
+  const cancel = () => {
+    if (!loading) onCancel();
+  };
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 motion-overlay"
+      style={{
+        backgroundColor: 'rgba(15, 23, 42, 0.62)',
+        backdropFilter: 'blur(14px)',
+        WebkitBackdropFilter: 'blur(14px)',
+      }}
+      onClick={cancel}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="delete-thread-title"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-sm overflow-hidden rounded-2xl shadow-2xl motion-pop"
+        style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' }}
+      >
+        <div className="px-6 pt-5 pb-4 text-center">
+          <div className="w-12 h-12 mx-auto mb-3 rounded-full flex items-center justify-center" style={{ backgroundColor: 'rgba(239,68,68,0.12)' }}>
+            <svg className="w-6 h-6 text-red-500" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+          </div>
+          <h3 id="delete-thread-title" className="text-base font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>
+            Hapus percakapan?
+          </h3>
+          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+            Semua pesan dengan <span className="font-semibold">{target.username}</span> akan dihapus dari kotak pesan Anda.
+          </p>
+        </div>
+        <div className="flex border-t" style={{ borderColor: 'var(--border-color)' }}>
+          <button
+            type="button"
+            onClick={cancel}
+            disabled={loading}
+            className="flex-1 py-3 text-sm font-semibold transition-colors hover:bg-black/5 disabled:opacity-60"
+            style={{ color: 'var(--text-secondary)' }}
+          >
+            Batal
+          </button>
+          <div className="w-px" style={{ backgroundColor: 'var(--border-color)' }} />
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={loading}
+            className="flex-1 py-3 text-sm font-semibold text-red-500 transition-colors hover:bg-red-500/10 disabled:opacity-60"
+          >
+            {loading ? 'Menghapus...' : 'Ya, hapus'}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 export default function Messages() {
   const { user } = useAuth();
   const [threads, setThreads] = useState([]);
@@ -38,6 +103,8 @@ export default function Messages() {
   const [msgInput, setMsgInput] = useState('');
   const [sending, setSending] = useState(false);
   const [hoveredMsg, setHoveredMsg] = useState(null);
+  const [confirmDelete, setConfirmDelete] = useState(null);
+  const [deletingThread, setDeletingThread] = useState(false);
 
   const [showCreate, setShowCreate] = useState(false);
   const [searchUser, setSearchUser] = useState('');
@@ -46,6 +113,7 @@ export default function Messages() {
 
   const messagesEndRef = useRef(null);
   const pollRef = useRef(null);
+  const activeThreadId = activeThread?.id;
 
   // Load threads
   useEffect(() => {
@@ -57,27 +125,35 @@ export default function Messages() {
 
   // Load conversation
   useEffect(() => {
-    if (!activeThread) return;
+    if (!activeThreadId) return;
+    let cancelled = false;
     setLoadingMsgs(true);
     setShowCreate(false);
 
     const loadMessages = () => {
-      api.get(`/messages/conversation/${activeThread.id}`).then((res) => {
+      api.get(`/messages/conversation/${activeThreadId}`).then((res) => {
+        if (cancelled) return;
         setMessages(res.data.data || []);
         setLoadingMsgs(false);
+      }).catch(() => {
+        if (!cancelled) setLoadingMsgs(false);
       });
     };
     loadMessages();
 
-    const thread = threads.find((t) => t.user?.id === activeThread.id);
-    if (thread && thread.unread_count > 0) {
-      api.patch(`/messages/conversation/${activeThread.id}/read-all`).catch(() => {});
-      setThreads((prev) => prev.map((t) => t.user?.id === activeThread.id ? { ...t, unread_count: 0 } : t));
-    }
+    setThreads((prev) => {
+      const thread = prev.find((t) => t.user?.id === activeThreadId);
+      if (!thread || thread.unread_count <= 0) return prev;
+      api.patch(`/messages/conversation/${activeThreadId}/read-all`).catch(() => {});
+      return prev.map((t) => t.user?.id === activeThreadId ? { ...t, unread_count: 0 } : t);
+    });
 
     pollRef.current = setInterval(loadMessages, 5000);
-    return () => clearInterval(pollRef.current);
-  }, [activeThread?.id]);
+    return () => {
+      cancelled = true;
+      clearInterval(pollRef.current);
+    };
+  }, [activeThreadId]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -107,7 +183,7 @@ export default function Messages() {
     try {
       const res = await api.get(`/users/${searchUser.trim()}`);
       const foundUser = res.data;
-      if (foundUser.id === user.id) { setSearchError('Tidak bisa chat dengan diri sendiri.'); setCreating(false); return; }
+      if (foundUser.id === user.id) { setSearchError('Tidak bisa mengirim pesan kepada diri sendiri.'); setCreating(false); return; }
       const existing = threads.find((t) => t.user?.id === foundUser.id);
       if (existing) { setActiveThread(existing.user); }
       else {
@@ -117,15 +193,26 @@ export default function Messages() {
       }
       setShowCreate(false);
       setSearchUser('');
-    } catch { setSearchError('User tidak ditemukan.'); }
+    } catch { setSearchError('Pengguna tidak ditemukan.'); }
     finally { setCreating(false); }
   };
 
   const deleteThread = async (threadUser) => {
-    if (!confirm(`Hapus semua pesan dengan ${threadUser.username}?`)) return;
-    await api.delete(`/messages/thread/${threadUser.id}`);
-    setThreads((prev) => prev.filter((t) => t.user?.id !== threadUser.id));
-    if (activeThread?.id === threadUser.id) { setActiveThread(null); setMessages([]); }
+    setConfirmDelete(threadUser);
+  };
+
+  const runDeleteThread = async () => {
+    if (!confirmDelete || deletingThread) return;
+    const threadUser = confirmDelete;
+    setDeletingThread(true);
+    try {
+      await api.delete(`/messages/thread/${threadUser.id}`);
+      setThreads((prev) => prev.filter((t) => t.user?.id !== threadUser.id));
+      if (activeThread?.id === threadUser.id) { setActiveThread(null); setMessages([]); }
+      setConfirmDelete(null);
+    } finally {
+      setDeletingThread(false);
+    }
   };
 
   const deleteMessage = async (msgId) => {
@@ -141,20 +228,26 @@ export default function Messages() {
     }));
   };
 
+  const showRightPanel = !!activeThread || showCreate;
+
   return (
-    <div className="rounded-xl overflow-hidden flex" style={{ ...cardStyle, height: 'calc(100vh - 120px)', minHeight: '500px' }}>
-      {/* Left Panel — Threads */}
-      <div className="w-72 shrink-0 flex flex-col" style={{ borderRight: '1px solid var(--border-color)' }}>
+    <>
+    <div className="app-card rounded-2xl overflow-hidden flex" style={{ ...cardStyle, height: 'calc(100vh - 132px)', minHeight: '500px' }}>
+      {/* Left Panel — Threads (mobile: full-width kalau belum pilih thread) */}
+      <div
+        className={`w-full md:w-72 shrink-0 flex-col ${showRightPanel ? 'hidden md:flex' : 'flex'}`}
+        style={{ borderRight: '1px solid var(--border-color)' }}
+      >
         <div className="flex items-center justify-between px-4 h-12 shrink-0" style={{ borderBottom: '1px solid var(--border-color)' }}>
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold" style={{ background: 'linear-gradient(135deg, #ff6b35, #f7931e)' }}>R</div>
-            <span className="font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>Chats</span>
+          <div className="flex items-baseline gap-2 min-w-0">
+            <span className="text-base font-black tracking-tight text-orange-500">Reddith</span>
+            <span className="text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>Pesan</span>
           </div>
           <button
             onClick={() => { setShowCreate(true); setActiveThread(null); setSearchUser(''); setSearchError(''); }}
             className="w-7 h-7 rounded-full flex items-center justify-center transition-colors"
             style={{ backgroundColor: 'var(--bg-input)', color: 'var(--text-muted)' }}
-            title="New Chat"
+            title="Percakapan Baru"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
           </button>
@@ -201,7 +294,7 @@ export default function Messages() {
                     <div className="flex items-center gap-1.5">
                       <p className="text-xs truncate flex-1" style={{ color: thread.unread_count > 0 ? 'var(--text-primary)' : 'var(--text-muted)', fontWeight: thread.unread_count > 0 ? 600 : 400 }}>
                         {thread.last_message
-                          ? `${thread.last_message.sender_id === user.id ? 'You: ' : ''}${thread.last_message.body}`
+                          ? `${thread.last_message.sender_id === user.id ? 'Kamu: ' : ''}${thread.last_message.body}`
                           : 'Mulai percakapan...'}
                       </p>
                       {thread.unread_count > 0 && (
@@ -227,29 +320,41 @@ export default function Messages() {
         </div>
       </div>
 
-      {/* Right Panel */}
-      <div className="flex-1 flex flex-col min-w-0">
+      {/* Right Panel — conversation (mobile: hidden kalau belum pilih thread) */}
+      <div className={`flex-1 flex-col min-w-0 ${showRightPanel ? 'flex motion-page-enter' : 'hidden md:flex'}`}>
         {/* Create Chat */}
         {showCreate && (
           <>
             <div className="flex items-center justify-between px-4 h-12 shrink-0" style={{ borderBottom: '1px solid var(--border-color)' }}>
-              <span className="font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>Create Chat</span>
-              <button onClick={() => setShowCreate(false)} style={{ color: 'var(--text-muted)' }}>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowCreate(false)}
+                  className="md:hidden w-8 h-8 -ml-2 rounded-full inline-flex items-center justify-center hover:bg-orange-500/10"
+                  style={{ color: 'var(--text-muted)' }}
+                  aria-label="Kembali"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
+                <span className="font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>Buat Percakapan</span>
+              </div>
+              <button onClick={() => setShowCreate(false)} className="hidden md:block" style={{ color: 'var(--text-muted)' }}>
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
             </div>
             <div className="flex-1 p-4">
               <form onSubmit={handleCreateChat}>
-                <input type="text" value={searchUser} onChange={(e) => setSearchUser(e.target.value)} placeholder="Type username(s) *"
-                  className="w-full px-4 py-3 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-400/50" style={inputStyle} autoFocus />
-                <p className="text-xs mt-2" style={{ color: 'var(--text-muted)' }}>Search for people by username to chat with them.</p>
+                <input type="text" value={searchUser} onChange={(e) => setSearchUser(e.target.value)} placeholder="Masukkan nama pengguna *"
+                  className="app-field w-full px-4 py-3 rounded-xl text-sm" style={inputStyle} autoFocus />
+                <p className="text-xs mt-2" style={{ color: 'var(--text-muted)' }}>Cari pengguna berdasarkan nama pengguna untuk memulai percakapan.</p>
                 {searchError && <p className="text-xs mt-2 text-red-500">{searchError}</p>}
               </form>
             </div>
             <div className="flex items-center justify-end gap-2 px-4 py-3" style={{ borderTop: '1px solid var(--border-color)' }}>
-              <button onClick={() => setShowCreate(false)} className="px-4 py-1.5 text-sm font-medium rounded-full" style={{ color: 'var(--text-secondary)' }}>Cancel</button>
-              <button onClick={handleCreateChat} disabled={creating || !searchUser.trim()} className="px-4 py-1.5 text-sm font-medium rounded-full bg-blue-500 text-white disabled:opacity-40">
-                {creating ? '...' : 'Create'}
+              <button onClick={() => setShowCreate(false)} className="px-4 py-1.5 text-sm font-medium rounded-full" style={{ color: 'var(--text-secondary)' }}>Batal</button>
+              <button onClick={handleCreateChat} disabled={creating || !searchUser.trim()} className="app-button-primary px-4 py-1.5 text-sm font-semibold rounded-full disabled:opacity-40">
+                {creating ? '...' : 'Buat'}
               </button>
             </div>
           </>
@@ -263,14 +368,14 @@ export default function Messages() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
               </svg>
             </div>
-            <p className="text-lg font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>Welcome to chat!</p>
-            <p className="text-sm text-center max-w-xs" style={{ color: 'var(--text-muted)' }}>Start a direct or group chat with other redditors.</p>
+            <p className="text-lg font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>Selamat datang di pesan!</p>
+            <p className="text-sm text-center max-w-xs" style={{ color: 'var(--text-muted)' }}>Mulai percakapan langsung atau grup dengan pengguna lain.</p>
             <button
               onClick={() => { setShowCreate(true); setSearchUser(''); setSearchError(''); }}
-              className="flex items-center gap-2 mt-5 px-5 py-2.5 bg-blue-500 text-white text-sm font-medium rounded-full hover:bg-blue-600 transition-colors"
+              className="app-button-primary flex items-center gap-2 mt-5 px-5 py-2.5 text-sm font-semibold rounded-full transition-colors"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
-              Start new chat
+              Mulai percakapan baru
             </button>
           </div>
         )}
@@ -280,7 +385,17 @@ export default function Messages() {
           <>
             {/* Header */}
             <div className="flex items-center justify-between px-4 h-12 shrink-0" style={{ borderBottom: '1px solid var(--border-color)' }}>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setActiveThread(null)}
+                  className="md:hidden w-8 h-8 -ml-2 rounded-full inline-flex items-center justify-center hover:bg-orange-500/10"
+                  style={{ color: 'var(--text-muted)' }}
+                  aria-label="Kembali ke daftar pesan"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
                 <Avatar url={activeThread.avatar_url} username={activeThread.username} size="md" />
                 <Link
                   to={`/user/${activeThread.username}`}
@@ -320,7 +435,7 @@ export default function Messages() {
                     >
                       {activeThread.username}
                     </Link>
-                    <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Redditor · {activeThread.karma ?? 0} karma</p>
+                    <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Pengguna · {activeThread.karma ?? 0} karma</p>
                   </div>
 
                   {/* Date separator */}
@@ -334,7 +449,7 @@ export default function Messages() {
                     </div>
                   )}
 
-                  {/* Message bubbles */}
+                  {/* Gelembung pesan */}
                   {messages.map((msg) => {
                     const isMine = msg.sender_id === user.id || msg.sender?.id === user.id;
                     const senderAvatar = isMine ? user.avatar_url : activeThread.avatar_url;
@@ -379,10 +494,10 @@ export default function Messages() {
             {/* Input */}
             <form onSubmit={sendMessage} className="px-4 py-3 shrink-0" style={{ borderTop: '1px solid var(--border-color)' }}>
               <div className="flex items-center gap-2">
-                <input type="text" value={msgInput} onChange={(e) => setMsgInput(e.target.value)} placeholder="Message"
-                  className="flex-1 px-4 py-2.5 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-orange-400/50" style={inputStyle} />
+                <input type="text" value={msgInput} onChange={(e) => setMsgInput(e.target.value)} placeholder="Tulis pesan"
+                  className="app-field flex-1 px-4 py-2.5 rounded-full text-sm" style={inputStyle} />
                 <button type="submit" disabled={sending || !msgInput.trim()}
-                  className="w-9 h-9 rounded-full flex items-center justify-center bg-blue-500 text-white disabled:opacity-40 shrink-0 transition-colors hover:bg-blue-600">
+                  className="app-button-primary w-9 h-9 rounded-full flex items-center justify-center disabled:opacity-40 shrink-0 transition-colors">
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M12 5l7 7-7 7" /></svg>
                 </button>
               </div>
@@ -391,5 +506,12 @@ export default function Messages() {
         )}
       </div>
     </div>
+    <DeleteThreadModal
+      target={confirmDelete}
+      loading={deletingThread}
+      onCancel={() => setConfirmDelete(null)}
+      onConfirm={runDeleteThread}
+    />
+    </>
   );
 }

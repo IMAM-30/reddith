@@ -1,9 +1,12 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Link, useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useApi } from '../hooks/useApi';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
 import { ConfirmDeleteModal } from './Home';
+import { FEATURES } from '../config/features';
+import ReportModal from '../components/common/ReportModal';
+import ActionMenu from '../components/common/ActionMenu';
 
 const cardStyle = { backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' };
 const inputStyle = { backgroundColor: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' };
@@ -12,12 +15,12 @@ function timeAgo(dateStr) {
   const date = new Date(dateStr);
   const diff = Date.now() - date.getTime();
   const mins = Math.floor(diff / 60000);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins}m ago`;
+  if (mins < 1) return 'Baru saja';
+  if (mins < 60) return `${mins} menit lalu`;
   const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
+  if (hrs < 24) return `${hrs} jam lalu`;
   const days = Math.floor(hrs / 24);
-  if (days < 7) return `${days}d ago`;
+  if (days < 7) return `${days} hari lalu`;
   const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
   return `${date.getDate()} ${monthNames[date.getMonth()]} ${date.getFullYear()}`;
 }
@@ -41,6 +44,16 @@ function UserAvatar({ user, size = 'sm' }) {
 function VotePill({ score, userVote, onVote, vertical = false }) {
   const upActive = userVote === 1;
   const downActive = userVote === -1;
+  if (!FEATURES.voting) {
+    return (
+      <div
+        className={vertical ? 'text-[11px] font-bold rounded-full px-2 py-1' : 'flex items-center rounded-full h-8 px-3 text-xs font-semibold'}
+        style={{ backgroundColor: 'var(--bg-input)', color: 'var(--text-secondary)' }}
+      >
+        Skor {score}
+      </div>
+    );
+  }
   if (vertical) {
     return (
       <div className="flex flex-col items-center gap-0.5">
@@ -115,6 +128,7 @@ function Comment({ comment: initial, postId, onDeleted, depth = 0, ancestorIds, 
   const [replyBody, setReplyBody] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
   const [deleted, setDeleted] = useState(false);
 
   const isCommentOwner = user && comment.user?.id === user.id;
@@ -190,7 +204,7 @@ function Comment({ comment: initial, postId, onDeleted, depth = 0, ancestorIds, 
           onClick={() => setCollapsed(!collapsed)}
           className="w-5 h-5 rounded-full flex items-center justify-center"
           style={{ color: 'var(--text-muted)' }}
-          title={collapsed ? 'Expand' : 'Collapse'}
+          title={collapsed ? 'Perluas' : 'Ciutkan'}
         >
           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
             {collapsed ? (
@@ -233,7 +247,7 @@ function Comment({ comment: initial, postId, onDeleted, depth = 0, ancestorIds, 
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
                   </svg>
-                  Reply
+                  Balas
                 </button>
               )}
               {isCommentOwner && (
@@ -248,6 +262,18 @@ function Comment({ comment: initial, postId, onDeleted, depth = 0, ancestorIds, 
                   Hapus
                 </button>
               )}
+              {user && !isCommentOwner && (
+                <button
+                  onClick={() => setReportOpen(true)}
+                  className="flex items-center gap-1.5 rounded-full h-8 px-3 text-xs font-semibold transition-colors hover:bg-red-500/10"
+                  style={{ color: 'var(--text-muted)' }}
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
+                  </svg>
+                  Laporkan
+                </button>
+              )}
             </div>
 
             <ConfirmDeleteModal
@@ -257,6 +283,13 @@ function Comment({ comment: initial, postId, onDeleted, depth = 0, ancestorIds, 
               onCancel={() => setConfirmingDelete(false)}
               onConfirm={performDeleteComment}
             />
+            <ReportModal
+              open={reportOpen}
+              targetType="comment"
+              targetId={comment.id}
+              targetLabel={`Komentar dari u/${comment.user?.username || 'pengguna'}`}
+              onClose={() => setReportOpen(false)}
+            />
 
             {/* Reply form */}
             {replying && (
@@ -264,18 +297,18 @@ function Comment({ comment: initial, postId, onDeleted, depth = 0, ancestorIds, 
                 <textarea
                   value={replyBody}
                   onChange={(e) => setReplyBody(e.target.value)}
-                  placeholder={`Reply to ${comment.user?.username}...`}
+                  placeholder={`Balas ${comment.user?.username}...`}
                   rows={3}
                   autoFocus
-                  className="w-full px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400/50 resize-none"
+                  className="app-field w-full px-3 py-2 rounded-xl text-sm resize-none"
                   style={inputStyle}
                 />
                 <div className="flex justify-end gap-2 mt-1.5">
                   <button type="button" onClick={() => { setReplying(false); setReplyBody(''); }} className="px-4 py-1 text-xs font-semibold rounded-full" style={{ color: 'var(--text-muted)' }}>
-                    Cancel
+                    Batal
                   </button>
-                  <button type="submit" disabled={submitting || !replyBody.trim()} className="px-4 py-1 text-xs font-semibold rounded-full bg-orange-500 text-white disabled:opacity-40">
-                    Reply
+                  <button type="submit" disabled={submitting || !replyBody.trim()} className="app-button-primary px-4 py-1 text-xs font-semibold rounded-full disabled:opacity-40">
+                    Balas
                   </button>
                 </div>
               </form>
@@ -293,7 +326,7 @@ function Comment({ comment: initial, postId, onDeleted, depth = 0, ancestorIds, 
                   <svg className={`w-3 h-3 transition-transform ${showReplies ? 'rotate-90' : ''}`} fill="currentColor" viewBox="0 0 24 24">
                     <path d="M8 5l8 7-8 7V5z" />
                   </svg>
-                  {showReplies ? `Hide replies (${replies.length})` : `Show replies (${replies.length})`}
+                  {showReplies ? `Sembunyikan balasan (${replies.length})` : `Tampilkan balasan (${replies.length})`}
                 </button>
 
                 {/* Visible replies — recursively rendered */}
@@ -321,7 +354,7 @@ function Comment({ comment: initial, postId, onDeleted, depth = 0, ancestorIds, 
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
                         </svg>
-                        Show more replies ({replies.length - visibleCount} remaining)
+                        Tampilkan balasan lainnya ({replies.length - visibleCount} tersisa)
                       </button>
                     )}
 
@@ -335,7 +368,7 @@ function Comment({ comment: initial, postId, onDeleted, depth = 0, ancestorIds, 
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
                         </svg>
-                        Hide
+                        Sembunyikan
                       </button>
                     )}
                   </div>
@@ -370,21 +403,11 @@ export default function PostDetail() {
   const [commentBody, setCommentBody] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [sort, setSort] = useState('New');
+  const [sort, setSort] = useState('Terbaru');
   const [mainVisibleCount, setMainVisibleCount] = useState(MAIN_PAGE_SIZE);
-  const [menuOpen, setMenuOpen] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
   const [targetCommentId, setTargetCommentId] = useState(null);
-  const menuRef = useRef(null);
-
-  useEffect(() => {
-    if (!menuOpen) return;
-    const onClick = (e) => {
-      if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false);
-    };
-    window.addEventListener('mousedown', onClick);
-    return () => window.removeEventListener('mousedown', onClick);
-  }, [menuOpen]);
 
   const performDelete = async () => {
     try {
@@ -433,13 +456,13 @@ export default function PostDetail() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const rawComments = commentsData?.data || [];
   const comments = useMemo(() => {
+    const rawComments = commentsData?.data || [];
     return [...rawComments].sort((a, b) => {
-      if (sort === 'Top') return (b.votes_sum_value || 0) - (a.votes_sum_value || 0);
+      if (FEATURES.voting && sort === 'Teratas') return (b.votes_sum_value || 0) - (a.votes_sum_value || 0);
       return new Date(b.created_at) - new Date(a.created_at);
     });
-  }, [rawComments, sort]);
+  }, [commentsData?.data, sort]);
 
   const hashId = useMemo(() => {
     const m = location.hash.match(/^#comment-(\w+)/);
@@ -490,22 +513,24 @@ export default function PostDetail() {
   if (!post) {
     return (
       <div className="text-center py-16">
-        <p className="text-lg font-medium" style={{ color: 'var(--text-primary)' }}>Post tidak ditemukan</p>
+        <p className="text-lg font-medium" style={{ color: 'var(--text-primary)' }}>Postingan tidak ditemukan</p>
       </div>
     );
   }
 
+  const isOwner = user && post.user?.id === user.id;
+
   return (
     <div className="space-y-4">
       {/* Post card */}
-      <article className="rounded-2xl px-5 py-4" style={cardStyle}>
+      <article className="app-card rounded-2xl px-5 py-4 relative overflow-visible" style={cardStyle}>
         {/* Top header: back + community + meta */}
         <div className="flex items-center gap-3 mb-3">
           <button
             onClick={() => navigate(-1)}
             className="w-8 h-8 rounded-full flex items-center justify-center transition-colors hover:bg-orange-500/10"
             style={{ color: 'var(--text-muted)' }}
-            title="Back"
+            title="Kembali"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
@@ -548,37 +573,57 @@ export default function PostDetail() {
               </Link>
             )}
           </div>
-          {user && post.user?.id === user.id && (
-            <div className="relative" ref={menuRef}>
-              <button
-                onClick={() => setMenuOpen((o) => !o)}
-                className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-orange-500/10 transition-colors"
-                style={{ color: 'var(--text-muted)' }}
-                title="Opsi"
-              >
-                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
-              </button>
-              {menuOpen && (
-                <div className="absolute right-0 top-9 z-20 rounded-xl shadow-xl overflow-hidden min-w-[140px]" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
-                  <button
-                    onClick={() => { setMenuOpen(false); setConfirming(true); }}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-red-500 hover:bg-red-500/10 transition-colors"
-                  >
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                    Hapus
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
+          <ActionMenu
+            label="Opsi postingan"
+            items={[
+              {
+                key: 'share',
+                label: copied ? 'Tersalin' : 'Bagikan',
+                closeOnSelect: false,
+                onSelect: handleShare,
+                icon: (
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                  </svg>
+                ),
+              },
+              user && !isOwner && {
+                key: 'report',
+                label: 'Laporkan',
+                danger: true,
+                onSelect: () => setReportOpen(true),
+                icon: (
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
+                  </svg>
+                ),
+              },
+              isOwner && {
+                key: 'delete',
+                label: 'Hapus',
+                danger: true,
+                onSelect: () => setConfirming(true),
+                icon: (
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                ),
+              },
+            ]}
+          />
         </div>
 
         <ConfirmDeleteModal
           open={confirming}
-          title="Hapus post?"
-          desc={`Post "${post.title?.length > 40 ? post.title.slice(0, 40) + '…' : post.title}" akan dihapus permanen.`}
+          title="Hapus postingan?"
+          desc={`Postingan "${post.title?.length > 40 ? post.title.slice(0, 40) + '…' : post.title}" akan dihapus permanen.`}
           onCancel={() => setConfirming(false)}
           onConfirm={performDelete}
+        />
+        <ReportModal
+          open={reportOpen}
+          targetType="post"
+          targetId={post.id}
+          targetLabel={`Postingan "${post.title}"`}
+          onClose={() => setReportOpen(false)}
         />
 
         {/* Title */}
@@ -593,13 +638,13 @@ export default function PostDetail() {
 
         {/* Image */}
         {post.image_url && (
-          <div className="rounded-xl overflow-hidden border mb-3" style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-input)' }}>
+          <div className="rounded-2xl overflow-hidden border mb-3" style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-input)' }}>
             <img src={post.image_url} alt="" className="w-full object-contain" style={{ maxHeight: '600px' }} />
           </div>
         )}
 
         {/* Footer actions */}
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <VotePill score={post.votes_sum_value || 0} userVote={post.user_vote || 0} onVote={handleVote} />
           <a
             href="#comments"
@@ -611,37 +656,27 @@ export default function PostDetail() {
             </svg>
             {post.comments_count || 0}
           </a>
-          <button
-            onClick={handleShare}
-            className="flex items-center gap-1.5 rounded-full h-8 px-3 text-xs font-semibold"
-            style={{ backgroundColor: 'var(--bg-input)', color: copied ? '#ff4500' : 'var(--text-secondary)' }}
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-            </svg>
-            {copied ? 'Copied' : 'Share'}
-          </button>
         </div>
       </article>
 
       {/* Comment form */}
       {user && (
-        <form onSubmit={handleComment} className="rounded-2xl px-4 py-3" style={cardStyle}>
+        <form onSubmit={handleComment} className="app-card rounded-2xl px-4 py-3" style={cardStyle}>
           <textarea
             value={commentBody}
             onChange={(e) => setCommentBody(e.target.value)}
-            placeholder="Join the conversation"
+            placeholder="Ikut berdiskusi"
             rows={commentBody ? 4 : 1}
-            className="w-full px-3 py-2 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-400/50 resize-none transition-all"
+            className="app-field w-full px-3 py-2 rounded-xl text-sm resize-none transition-all"
             style={inputStyle}
           />
           {commentBody && (
             <div className="flex justify-end gap-2 mt-2">
               <button type="button" onClick={() => setCommentBody('')} className="px-4 py-1.5 text-xs font-semibold rounded-full" style={{ color: 'var(--text-muted)' }}>
-                Cancel
+                Batal
               </button>
-              <button type="submit" disabled={submitting || !commentBody.trim()} className="px-5 py-1.5 text-xs font-semibold rounded-full bg-orange-500 text-white disabled:opacity-40 hover:bg-orange-600 transition-colors">
-                {submitting ? 'Posting...' : 'Comment'}
+              <button type="submit" disabled={submitting || !commentBody.trim()} className="app-button-primary px-5 py-1.5 text-xs font-semibold rounded-full disabled:opacity-40 transition-colors">
+                {submitting ? 'Mengirim...' : 'Komentar'}
               </button>
             </div>
           )}
@@ -650,32 +685,44 @@ export default function PostDetail() {
 
       {/* Sort & comments */}
       <div id="comments">
-        <div className="flex items-center gap-3 mb-3 px-1">
-          <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Sort by:</span>
-          <div className="relative">
-            <select
-              value={sort}
-              onChange={(e) => setSort(e.target.value)}
-              className="text-xs font-semibold bg-transparent border-none focus:outline-none cursor-pointer pr-4"
-              style={{ color: 'var(--text-primary)' }}
-            >
-              <option>New</option>
-              <option>Top</option>
-            </select>
+        {FEATURES.voting && (
+          <div className="flex items-center gap-3 mb-3 px-1">
+            <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Urutkan:</span>
+            <div className="relative inline-flex items-center">
+              <select
+                value={sort}
+                onChange={(e) => setSort(e.target.value)}
+                className="comment-sort-select cursor-pointer appearance-none rounded-full px-3 py-1.5 pr-8 text-xs font-bold transition-colors"
+              >
+                <option>Terbaru</option>
+                <option>Teratas</option>
+              </select>
+              <svg
+                className="pointer-events-none absolute right-3 h-3.5 w-3.5"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2.3}
+                viewBox="0 0 24 24"
+                style={{ color: 'var(--text-muted)' }}
+                aria-hidden="true"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="m6 9 6 6 6-6" />
+              </svg>
+            </div>
           </div>
-        </div>
+        )}
 
         {loadingComments ? (
           <div className="flex justify-center py-6">
             <div className="w-6 h-6 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
           </div>
         ) : comments.length === 0 ? (
-          <div className="text-center py-10 rounded-2xl" style={cardStyle}>
+          <div className="app-empty-state text-center py-10 rounded-2xl" style={cardStyle}>
             <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Belum ada komentar</p>
             <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>Jadilah yang pertama memulai diskusi.</p>
           </div>
         ) : (
-          <div className="rounded-2xl px-5 py-4 space-y-5" style={cardStyle}>
+          <div className="app-card rounded-2xl px-5 py-4 space-y-5" style={cardStyle}>
             {comments.slice(0, mainVisibleCount).map((c) => (
               <Comment
                 key={c.id}
@@ -704,7 +751,7 @@ export default function PostDetail() {
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
                 </svg>
-                Show more comments ({comments.length - mainVisibleCount} remaining)
+                Tampilkan komentar lainnya ({comments.length - mainVisibleCount} tersisa)
               </button>
             )}
 
@@ -718,7 +765,7 @@ export default function PostDetail() {
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
                 </svg>
-                Hide
+                Sembunyikan
               </button>
             )}
           </div>

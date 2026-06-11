@@ -16,6 +16,9 @@ const User = sequelize.define(
     email_verified_at: { type: DataTypes.DATE, allowNull: true },
     password: { type: DataTypes.STRING, allowNull: false },
     avatar: { type: DataTypes.STRING, allowNull: true },
+    cover: { type: DataTypes.STRING, allowNull: true },
+    font_size_level: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+    role: { type: DataTypes.STRING, allowNull: false, defaultValue: 'user' },
     remember_token: { type: DataTypes.STRING, allowNull: true },
   },
   {

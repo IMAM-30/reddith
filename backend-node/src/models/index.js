@@ -8,6 +8,7 @@ const Comment = require('./Comment');
 const Vote = require('./Vote');
 const DirectMessage = require('./DirectMessage');
 const Notification = require('./Notification');
+const Report = require('./Report');
 
 // ============ RELASI ============
 
@@ -63,6 +64,16 @@ User.hasMany(DirectMessage, {
 DirectMessage.belongsTo(User, { foreignKey: 'sender_id', as: 'sender' });
 DirectMessage.belongsTo(User, { foreignKey: 'receiver_id', as: 'receiver' });
 
+// User <-> Report (reporter, target owner, moderator)
+User.hasMany(Report, { foreignKey: 'reporter_id', as: 'submittedReports' });
+User.hasMany(Report, { foreignKey: 'target_owner_id', as: 'receivedReports' });
+User.hasMany(Report, { foreignKey: 'moderator_id', as: 'moderatedReports' });
+Report.belongsTo(User, { foreignKey: 'reporter_id', as: 'reporter' });
+Report.belongsTo(User, { foreignKey: 'target_owner_id', as: 'targetOwner' });
+Report.belongsTo(User, { foreignKey: 'moderator_id', as: 'moderator' });
+Post.hasMany(Report, { foreignKey: 'post_id', as: 'reports' });
+Report.belongsTo(Post, { foreignKey: 'post_id', as: 'post' });
+
 module.exports = {
   sequelize,
   User,
@@ -73,4 +84,5 @@ module.exports = {
   Vote,
   DirectMessage,
   Notification,
+  Report,
 };

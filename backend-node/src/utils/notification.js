@@ -10,6 +10,7 @@ const TYPES = {
   COMMUNITY_APPROVED: 'community_approved',
   COMMUNITY_REJECTED: 'community_rejected',
   COMMUNITY_POST: 'community_post',
+  MODERATION_REMOVED: 'moderation_removed',
 };
 
 async function createNotification({ userId, type, data }) {

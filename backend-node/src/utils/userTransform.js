@@ -2,6 +2,20 @@ const { Op } = require('sequelize');
 const { assetUrl } = require('./asset');
 const { Vote, Post, Comment } = require('../models');
 
+function moderatorUsernames() {
+  return (process.env.MODERATOR_USERNAMES || 'moderator,admin')
+    .split(',')
+    .map((name) => name.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function isModeratorUser(user) {
+  if (!user) return false;
+  const role = String(user.role || '').toLowerCase();
+  const username = String(user.username || '').toLowerCase();
+  return role === 'moderator' || role === 'admin' || moderatorUsernames().includes(username);
+}
+
 // Versi batch — hitung karma untuk banyak user dalam beberapa query saja.
 // Self-vote (user vote post/komen milik sendiri) tidak dihitung.
 // Return Map<userId, karma>.
@@ -98,10 +112,15 @@ async function transformUser(user, { withKarma = true } = {}) {
   delete obj.password;
   delete obj.remember_token;
   obj.avatar_url = assetUrl(obj.avatar);
+  obj.cover_url = assetUrl(obj.cover);
+  obj.role = obj.role || 'user';
+  obj.is_moderator = isModeratorUser(obj);
+  const fontLevel = Number.parseInt(obj.font_size_level ?? 0, 10);
+  obj.font_size_level = Number.isInteger(fontLevel) ? Math.max(-4, Math.min(4, fontLevel)) : 0;
   if (withKarma) {
     obj.karma = await calculateKarma(obj.id);
   }
   return obj;
 }
 
-module.exports = { transformUser, calculateKarma, calculateKarmaBatch };
+module.exports = { transformUser, calculateKarma, calculateKarmaBatch, isModeratorUser };

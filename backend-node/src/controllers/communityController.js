@@ -18,6 +18,7 @@ function transformCommunity(c) {
   if (!c) return null;
   const obj = c.toJSON ? c.toJSON() : { ...c };
   obj.icon_url = assetUrl(obj.icon);
+  obj.cover_url = assetUrl(obj.cover);
   return obj;
 }
 
@@ -373,7 +374,7 @@ async function updateSettings(req, res) {
     const community = await assertOwner(req, res);
     if (!community) return;
 
-    const { visibility, min_karma, description, remove_icon } = req.body;
+    const { visibility, min_karma, description, remove_icon, remove_cover } = req.body;
     const updates = {};
     if (visibility === 'public' || visibility === 'private') {
       updates.visibility = visibility;
@@ -389,12 +390,23 @@ async function updateSettings(req, res) {
       updates.description = description || null;
     }
 
-    if (req.file) {
+    const iconFile = req.files?.icon?.[0] || req.file;
+    const coverFile = req.files?.cover?.[0];
+
+    if (iconFile) {
       if (community.icon) deleteStorageFile(community.icon);
-      updates.icon = relativePathFromFile(req.file, 'communities');
+      updates.icon = relativePathFromFile(iconFile, 'communities');
     } else if (remove_icon === '1' || remove_icon === 'true' || remove_icon === true) {
       if (community.icon) deleteStorageFile(community.icon);
       updates.icon = null;
+    }
+
+    if (coverFile) {
+      if (community.cover) deleteStorageFile(community.cover);
+      updates.cover = relativePathFromFile(coverFile, 'communities');
+    } else if (remove_cover === '1' || remove_cover === 'true' || remove_cover === true) {
+      if (community.cover) deleteStorageFile(community.cover);
+      updates.cover = null;
     }
 
     Object.assign(community, updates);

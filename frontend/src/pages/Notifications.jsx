@@ -22,12 +22,12 @@ function timeAgo(dateStr) {
   const d = new Date(dateStr);
   const diffMs = new Date() - d;
   const mins = Math.floor(diffMs / 60000);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins}m ago`;
+  if (mins < 1) return 'Baru saja';
+  if (mins < 60) return `${mins} menit lalu`;
   const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
+  if (hours < 24) return `${hours} jam lalu`;
   const days = Math.floor(hours / 24);
-  if (days < 7) return `${days}d ago`;
+  if (days < 7) return `${days} hari lalu`;
   return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
@@ -71,7 +71,7 @@ function VoteBadge({ value }) {
     <span
       className="inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold text-white ml-1 align-middle"
       style={{ backgroundColor: isUp ? '#16a34a' : '#dc2626' }}
-      title={isUp ? 'Upvote' : 'Downvote'}
+      title={isUp ? 'Suara naik' : 'Suara turun'}
     >
       {isUp ? '▲' : '▼'}
     </span>
@@ -95,6 +95,8 @@ function groupKeyOf(n) {
       return `creq:${d.community_id}`;
     case 'community_post':
       return `cpost:${d.community_id}`;
+    case 'moderation_removed':
+      return `moderation:${n.id}`;
     case 'community_approved':
     case 'community_rejected':
       return `single:${n.id}`;
@@ -170,7 +172,7 @@ function renderGroup(group) {
           <span>
             {label}{' '}
             <span style={{ color: 'var(--text-muted)' }}>
-              memberikan {d.value === 1 ? 'upvote' : 'downvote'} ke post
+              memberikan {d.value === 1 ? 'suara naik' : 'suara turun'} ke postingan
             </span>{' '}
             <em style={{ color: 'var(--text-primary)' }}>"{d.post_title}"</em>
             <VoteBadge value={d.value} />
@@ -184,7 +186,7 @@ function renderGroup(group) {
           <span>
             {label}{' '}
             <span style={{ color: 'var(--text-muted)' }}>
-              memberikan {d.value === 1 ? 'upvote' : 'downvote'} ke komentarmu
+              memberikan {d.value === 1 ? 'suara naik' : 'suara turun'} ke komentarmu
             </span>
             <VoteBadge value={d.value} />
             {d.comment_excerpt && count === 1 && (
@@ -202,7 +204,7 @@ function renderGroup(group) {
           <span>
             {label}{' '}
             <span style={{ color: 'var(--text-muted)' }}>
-              {count > 1 ? 'mengomentari postmu' : 'mengomentari postmu'}
+              {count > 1 ? 'mengomentari postinganmu' : 'mengomentari postinganmu'}
             </span>{' '}
             <em style={{ color: 'var(--text-primary)' }}>"{d.post_title}"</em>
             {d.body && count === 1 && (
@@ -241,7 +243,7 @@ function renderGroup(group) {
         node: (
           <span>
             {label}{' '}
-            <span style={{ color: 'var(--text-muted)' }}>bergabung ke community</span>{' '}
+            <span style={{ color: 'var(--text-muted)' }}>bergabung ke komunitas</span>{' '}
             <em style={{ color: 'var(--text-primary)' }}>r/{d.community_name}</em>
           </span>
         ),
@@ -252,7 +254,7 @@ function renderGroup(group) {
         node: (
           <span>
             {label}{' '}
-            <span style={{ color: 'var(--text-muted)' }}>minta bergabung ke community</span>{' '}
+            <span style={{ color: 'var(--text-muted)' }}>meminta bergabung ke komunitas</span>{' '}
             <em style={{ color: 'var(--text-primary)' }}>r/{d.community_name}</em>
           </span>
         ),
@@ -293,6 +295,33 @@ function renderGroup(group) {
           </span>
         ),
       };
+    case 'moderation_removed':
+      return {
+        target: null,
+        node: (
+          <span>
+            <span style={{ color: 'var(--text-muted)' }}>
+              {d.target_type === 'comment' ? 'Komentar Anda' : 'Postingan Anda'}
+              {' '}dihapus moderator karena melanggar peraturan.
+            </span>
+            {d.post_title && (
+              <span className="block text-xs mt-1 line-clamp-1" style={{ color: 'var(--text-primary)' }}>
+                "{d.post_title}"
+              </span>
+            )}
+            {d.content_excerpt && (
+              <span className="block text-xs mt-1 line-clamp-2" style={{ color: 'var(--text-muted)' }}>
+                {d.content_excerpt}
+              </span>
+            )}
+            {d.reason && (
+              <span className="block text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+                Alasan: {d.reason}
+              </span>
+            )}
+          </span>
+        ),
+      };
     default:
       return {
         target: d.post_id ? `/post/${d.post_id}` : null,
@@ -324,13 +353,16 @@ export default function Notifications() {
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    api.get('/notifications')
-      .then((res) => {
-        if (cancelled) return;
-        setNotifications(res.data?.data || []);
-      })
-      .finally(() => { if (!cancelled) setLoading(false); });
+    Promise.resolve().then(() => {
+      if (cancelled) return null;
+      setLoading(true);
+      return api.get('/notifications')
+        .then((res) => {
+          if (cancelled) return;
+          setNotifications(res.data?.data || []);
+        })
+        .finally(() => { if (!cancelled) setLoading(false); });
+    });
     return () => { cancelled = true; };
   }, []);
 
@@ -435,7 +467,7 @@ export default function Notifications() {
       </div>
 
       {notifications.length === 0 ? (
-        <div className="text-center py-20 rounded-xl relative overflow-hidden" style={cardStyle}>
+        <div className="app-empty-state text-center py-20 rounded-2xl relative overflow-hidden" style={cardStyle}>
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.06]">
             <svg viewBox="0 0 24 24" fill="currentColor" className="w-64 h-64" style={{ color: 'var(--text-muted)' }}>
               <path d="M12 22a2.5 2.5 0 002.45-2h-4.9A2.5 2.5 0 0012 22zm7-6v-5a7 7 0 00-5.5-6.84V3.5a1.5 1.5 0 00-3 0v.66A7 7 0 005 11v5l-2 2v1h18v-1l-2-2z" />
@@ -447,7 +479,7 @@ export default function Notifications() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.4-1.4A2 2 0 0118 14.2V11a6 6 0 10-12 0v3.2a2 2 0 01-.6 1.4L4 17h5m6 0a3 3 0 11-6 0m6 0H9" />
               </svg>
             </div>
-            <p className="font-semibold text-base" style={{ color: 'var(--text-primary)' }}>No notifications</p>
+            <p className="font-semibold text-base" style={{ color: 'var(--text-primary)' }}>Tidak ada notifikasi</p>
             <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
               Belum ada notifikasi. Aktivitas baru akan muncul di sini.
             </p>
@@ -463,7 +495,7 @@ export default function Notifications() {
             return (
               <div
                 key={g.key}
-                className="group rounded-xl p-4 transition-all cursor-pointer relative"
+                className="app-card app-card-hover group rounded-2xl p-4 transition-all cursor-pointer relative"
                 style={{
                   backgroundColor: unread ? undefined : 'var(--bg-card)',
                   background: unread
@@ -526,12 +558,12 @@ export default function Notifications() {
 
       {confirm && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 motion-overlay"
           style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
           onClick={() => setConfirm(null)}
         >
           <div
-            className="rounded-xl p-5 max-w-sm w-full"
+            className="app-card rounded-2xl p-5 max-w-sm w-full motion-pop"
             style={cardStyle}
             onClick={(e) => e.stopPropagation()}
           >

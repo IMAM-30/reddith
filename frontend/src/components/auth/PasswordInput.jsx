@@ -13,7 +13,7 @@ const PasswordInput = forwardRef(function PasswordInput(
       <input
         ref={ref}
         type={visible ? 'text' : 'password'}
-        className={`w-full pr-10 px-3 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400/50 ${className}`}
+        className={`app-field w-full pr-10 px-3 py-2.5 border rounded-xl text-sm ${className}`}
         style={{ ...inputStyle, ...style }}
         {...rest}
       />
@@ -23,8 +23,8 @@ const PasswordInput = forwardRef(function PasswordInput(
         tabIndex={-1}
         className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 flex items-center justify-center rounded-full transition-colors hover:bg-orange-500/10"
         style={{ color: 'var(--text-muted)' }}
-        aria-label={visible ? 'Sembunyikan password' : 'Tampilkan password'}
-        title={visible ? 'Sembunyikan password' : 'Tampilkan password'}
+        aria-label={visible ? 'Sembunyikan kata sandi' : 'Tampilkan kata sandi'}
+        title={visible ? 'Sembunyikan kata sandi' : 'Tampilkan kata sandi'}
       >
         {visible ? (
           <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">

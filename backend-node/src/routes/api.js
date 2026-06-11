@@ -13,10 +13,17 @@ const message = require('../controllers/messageController');
 const notification = require('../controllers/notificationController');
 const user = require('../controllers/userController');
 const search = require('../controllers/searchController');
+const report = require('../controllers/reportController');
 
 const uploadCommunityIcon = createUploader('communities').single('icon');
+const uploadCommunityMedia = createUploader('communities').fields([
+  { name: 'icon', maxCount: 1 },
+  { name: 'cover', maxCount: 1 },
+]);
 const uploadPostImage = createUploader('posts').single('image');
 const uploadAvatar = createUploader('avatars').single('avatar');
+const uploadCover = createUploader('covers').single('cover');
+const uploadReportEvidence = createUploader('reports').single('evidence');
 
 // ── Public ──────────────────────────────────────────────
 router.post('/register', auth.register);
@@ -49,7 +56,7 @@ router.post('/communities/:slug/join', authRequired, community.join);
 router.delete('/communities/:slug/leave', authRequired, community.leave);
 
 // Community owner actions
-router.patch('/communities/:slug/settings', authRequired, uploadCommunityIcon, community.updateSettings);
+router.patch('/communities/:slug/settings', authRequired, uploadCommunityMedia, community.updateSettings);
 router.get('/communities/:slug/members', authRequired, community.members);
 router.get('/communities/:slug/requests', authRequired, community.requests);
 router.post('/communities/:slug/requests/:userId/approve', authRequired, community.approveRequest);
@@ -78,8 +85,15 @@ router.delete('/notifications/clear-all', authRequired, notification.destroyAll)
 router.delete('/notifications/batch', authRequired, notification.batchDestroy);
 router.delete('/notifications/:id', authRequired, notification.destroy);
 
+// Reports & moderation
+router.post('/reports', authRequired, uploadReportEvidence, report.store);
+router.get('/moderation/reports', authRequired, report.index);
+router.patch('/moderation/reports/:id/dismiss', authRequired, report.dismiss);
+router.post('/moderation/reports/:id/delete-target', authRequired, report.deleteTarget);
+
 // Profile
 router.post('/update-avatar', authRequired, uploadAvatar, user.updateAvatar);
+router.post('/update-cover', authRequired, uploadCover, user.updateCover);
 router.put('/update-profile', authRequired, user.updateProfile);
 
 // Direct Messages

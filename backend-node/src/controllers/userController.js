@@ -1,7 +1,8 @@
+const bcrypt = require('bcryptjs');
 const { Op } = require('sequelize');
 const { User, Post, Community, Comment, Vote } = require('../models');
 const { assetUrl } = require('../utils/asset');
-const { calculateKarma } = require('../utils/userTransform');
+const { calculateKarma, isModeratorUser } = require('../utils/userTransform');
 const {
   relativePathFromFile,
   deleteStorageFile,
@@ -19,6 +20,11 @@ async function show(req, res) {
       name: user.name,
       username: user.username,
       avatar: assetUrl(user.avatar),
+      avatar_url: assetUrl(user.avatar),
+      cover: assetUrl(user.cover),
+      cover_url: assetUrl(user.cover),
+      role: user.role || 'user',
+      is_moderator: isModeratorUser(user),
       karma: await calculateKarma(user.id),
       created_at: user.created_at,
     });
@@ -37,7 +43,13 @@ async function profile(req, res) {
       username: user.username,
       name: user.name,
       nim: user.nim,
+      font_size_level: user.font_size_level || 0,
       avatar: assetUrl(user.avatar),
+      avatar_url: assetUrl(user.avatar),
+      cover: assetUrl(user.cover),
+      cover_url: assetUrl(user.cover),
+      role: user.role || 'user',
+      is_moderator: isModeratorUser(user),
       karma: await calculateKarma(user.id),
       created_at: user.created_at,
     });
@@ -71,22 +83,84 @@ async function updateAvatar(req, res) {
   }
 }
 
+async function updateCover(req, res) {
+  try {
+    if (!req.file) {
+      return res.status(422).json({
+        message: 'The given data was invalid.',
+        errors: { cover: ['Sampul required.'] },
+      });
+    }
+
+    if (req.user.cover) deleteStorageFile(req.user.cover);
+
+    const path = relativePathFromFile(req.file, 'covers');
+    req.user.cover = path;
+    await req.user.save();
+
+    return res.json({
+      message: 'Sampul berhasil diperbarui.',
+      cover: assetUrl(path),
+      cover_url: assetUrl(path),
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: err.message });
+  }
+}
+
 async function updateProfile(req, res) {
   try {
-    const { name, username } = req.body;
+    const { name, username, nim, font_size_level, password, password_confirmation } = req.body;
     const updates = {};
-    if (name !== undefined) updates.name = name;
+    const errors = {};
+
+    if (name !== undefined) {
+      const cleanName = String(name).trim();
+      if (!cleanName) errors.name = ['Nama tidak boleh kosong.'];
+      else updates.name = cleanName;
+    }
+
     if (username !== undefined) {
-      const exists = await User.findOne({
-        where: { username, id: { [Op.ne]: req.user.id } },
-      });
-      if (exists) {
-        return res.status(422).json({
-          message: 'The given data was invalid.',
-          errors: { username: ['Username sudah dipakai.'] },
-        });
+      const cleanUsername = String(username).trim();
+      if (cleanUsername !== req.user.username) {
+        errors.username = ['Username tidak bisa diubah setelah registrasi.'];
       }
-      updates.username = username;
+    }
+
+    if (nim !== undefined) {
+      const cleanNim = String(nim).replace(/\D/g, '');
+      if (cleanNim !== req.user.nim) {
+        errors.nim = ['NIM tidak bisa diubah setelah registrasi.'];
+      }
+    }
+
+    if (font_size_level !== undefined) {
+      const parsedLevel = Number(font_size_level);
+      if (!Number.isInteger(parsedLevel) || parsedLevel < -4 || parsedLevel > 4) {
+        errors.font_size_level = ['Ukuran font tidak valid. Pilih level -4 sampai 4.'];
+      } else {
+        updates.font_size_level = parsedLevel;
+      }
+    }
+
+    if (password || password_confirmation) {
+      if (!password || String(password).length < 6) {
+        errors.password = ['Password minimal 6 karakter.'];
+      }
+      if (password !== password_confirmation) {
+        errors.password_confirmation = ['Konfirmasi password tidak cocok.'];
+      }
+      if (!errors.password && !errors.password_confirmation) {
+        updates.password = await bcrypt.hash(password, 10);
+      }
+    }
+
+    if (Object.keys(errors).length > 0) {
+      return res.status(422).json({
+        message: 'The given data was invalid.',
+        errors,
+      });
     }
 
     Object.assign(req.user, updates);
@@ -98,7 +172,14 @@ async function updateProfile(req, res) {
         id: req.user.id,
         name: req.user.name,
         username: req.user.username,
+        nim: req.user.nim,
+        font_size_level: req.user.font_size_level,
         avatar: assetUrl(req.user.avatar),
+        avatar_url: assetUrl(req.user.avatar),
+        cover: assetUrl(req.user.cover),
+        cover_url: assetUrl(req.user.cover),
+        role: req.user.role || 'user',
+        is_moderator: isModeratorUser(req.user),
       },
     });
   } catch (err) {
@@ -152,4 +233,4 @@ async function userPosts(req, res) {
   }
 }
 
-module.exports = { show, profile, updateAvatar, updateProfile, userPosts };
+module.exports = { show, profile, updateAvatar, updateCover, updateProfile, userPosts };

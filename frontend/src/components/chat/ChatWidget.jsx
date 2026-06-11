@@ -4,6 +4,34 @@ import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
 
 const inputStyle = { backgroundColor: 'var(--bg-input)', borderColor: 'var(--border-color)', color: 'var(--text-primary)' };
+const MOBILE_QUERY = '(max-width: 640px)';
+const MOBILE_MIN_HEIGHT = 320;
+const MOBILE_TOP_GAP = 12;
+const MOBILE_DEFAULT_RATIO = 0.65;
+
+function getIsMobile() {
+  return typeof window !== 'undefined' && window.matchMedia(MOBILE_QUERY).matches;
+}
+
+function getViewportHeight() {
+  return typeof window === 'undefined' ? 720 : window.innerHeight;
+}
+
+function getMobileHeightBounds() {
+  const max = Math.max(280, getViewportHeight() - MOBILE_TOP_GAP);
+  const min = Math.min(MOBILE_MIN_HEIGHT, max);
+  return { min, max };
+}
+
+function clampMobileHeight(value) {
+  const { min, max } = getMobileHeightBounds();
+  return Math.max(min, Math.min(max, value));
+}
+
+function getDefaultMobileHeight() {
+  const ideal = Math.round(getViewportHeight() * MOBILE_DEFAULT_RATIO);
+  return clampMobileHeight(ideal);
+}
 
 function timeShort(dateStr) {
   const d = new Date(dateStr);
@@ -53,7 +81,9 @@ export default function ChatWidget({ open, onClose, onUnreadChange }) {
   const [sending, setSending] = useState(false);
   const [hoveredMsg, setHoveredMsg] = useState(null);
   const [minimized, setMinimized] = useState(false);
+  const [isMobile, setIsMobile] = useState(getIsMobile);
   const [size, setSize] = useState(null); // { width, height } — null = pakai default
+  const [mobileHeight, setMobileHeight] = useState(getDefaultMobileHeight);
   const resizingRef = useRef(null);
   const [confirmDel, setConfirmDel] = useState(null); // { kind: 'thread'|'message', ... } | null
   const [replyTo, setReplyTo] = useState(null); // { id, sender_id, body } | null
@@ -68,6 +98,8 @@ export default function ChatWidget({ open, onClose, onUnreadChange }) {
   const messagesEndRef = useRef(null);
   const pollRef = useRef(null);
   const threadPollRef = useRef(null);
+  const onUnreadChangeRef = useRef(onUnreadChange);
+  const threadsRef = useRef(threads);
 
   // Default & batas ukuran resize
   const DEFAULT_HEIGHT = 480;
@@ -87,6 +119,41 @@ export default function ChatWidget({ open, onClose, onUnreadChange }) {
   };
   const minWidth = DEFAULT_WIDTH_CONV;
   const minHeight = DEFAULT_HEIGHT;
+  const activeThreadId = activeThread?.id;
+
+  useEffect(() => {
+    onUnreadChangeRef.current = onUnreadChange;
+  }, [onUnreadChange]);
+
+  useEffect(() => {
+    threadsRef.current = threads;
+  }, [threads]);
+
+  useEffect(() => {
+    const media = window.matchMedia(MOBILE_QUERY);
+    const syncMobile = () => setIsMobile(media.matches);
+    syncMobile();
+    media.addEventListener?.('change', syncMobile);
+    media.addListener?.(syncMobile);
+    return () => {
+      media.removeEventListener?.('change', syncMobile);
+      media.removeListener?.(syncMobile);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isMobile) return;
+    const keepWithinViewport = () => setMobileHeight((height) => clampMobileHeight(height));
+    keepWithinViewport();
+    window.addEventListener('resize', keepWithinViewport);
+    return () => window.removeEventListener('resize', keepWithinViewport);
+  }, [isMobile]);
+
+  useEffect(() => {
+    if (isMobile && minimized) {
+      setMinimized(false);
+    }
+  }, [isMobile, minimized]);
 
   const startResize = (e) => {
     e.preventDefault();
@@ -116,6 +183,35 @@ export default function ChatWidget({ open, onClose, onUnreadChange }) {
     document.body.style.userSelect = 'none';
   };
 
+  const startMobileResize = (e) => {
+    if (!isMobile) return;
+    e.preventDefault();
+    const startY = e.clientY;
+    const startH = mobileHeight;
+    const previousUserSelect = document.body.style.userSelect;
+    const previousTouchAction = document.body.style.touchAction;
+    resizingRef.current = { mode: 'mobile-height', startY, startH };
+
+    const onMove = (ev) => {
+      const dy = startY - ev.clientY;
+      setMobileHeight(clampMobileHeight(startH + dy));
+    };
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+      document.body.style.userSelect = previousUserSelect;
+      document.body.style.touchAction = previousTouchAction;
+      resizingRef.current = null;
+    };
+
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
+    document.body.style.userSelect = 'none';
+    document.body.style.touchAction = 'none';
+  };
+
   // Load threads + poll for unread
   useEffect(() => {
     if (!user) return;
@@ -124,7 +220,7 @@ export default function ChatWidget({ open, onClose, onUnreadChange }) {
         setThreads(res.data);
         setLoadingThreads(false);
         const total = res.data.reduce((sum, t) => sum + (t.unread_count || 0), 0);
-        onUnreadChange?.(total);
+        onUnreadChangeRef.current?.(total);
       }).catch(() => setLoadingThreads(false));
     };
     loadThreads();
@@ -134,32 +230,32 @@ export default function ChatWidget({ open, onClose, onUnreadChange }) {
 
   // Load conversation
   useEffect(() => {
-    if (!activeThread) return;
+    if (!activeThreadId) return;
     setLoadingMsgs(true);
     setShowCreate(false);
 
     const loadMessages = () => {
-      api.get(`/messages/conversation/${activeThread.id}`).then((res) => {
+      api.get(`/messages/conversation/${activeThreadId}`).then((res) => {
         setMessages(res.data.data || []);
         setLoadingMsgs(false);
       });
     };
     loadMessages();
 
-    const thread = threads.find((t) => t.user?.id === activeThread.id);
+    const thread = threadsRef.current.find((t) => t.user?.id === activeThreadId);
     if (thread && thread.unread_count > 0) {
-      api.patch(`/messages/conversation/${activeThread.id}/read-all`).catch(() => {});
+      api.patch(`/messages/conversation/${activeThreadId}/read-all`).catch(() => {});
       setThreads((prev) => {
-        const updated = prev.map((t) => t.user?.id === activeThread.id ? { ...t, unread_count: 0 } : t);
+        const updated = prev.map((t) => t.user?.id === activeThreadId ? { ...t, unread_count: 0 } : t);
         const total = updated.reduce((sum, t) => sum + (t.unread_count || 0), 0);
-        onUnreadChange?.(total);
+        onUnreadChangeRef.current?.(total);
         return updated;
       });
     }
 
     pollRef.current = setInterval(loadMessages, 5000);
     return () => clearInterval(pollRef.current);
-  }, [activeThread?.id]);
+  }, [activeThreadId]);
 
   // Smart auto-scroll: hanya scroll bawah kalau user sudah di bawah
   useEffect(() => {
@@ -211,7 +307,7 @@ export default function ChatWidget({ open, onClose, onUnreadChange }) {
     try {
       const res = await api.get(`/users/${searchUser.trim()}`);
       const f = res.data;
-      if (f.id === user.id) { setSearchError('Tidak bisa chat dengan diri sendiri.'); setCreating(false); return; }
+      if (f.id === user.id) { setSearchError('Tidak bisa mengirim pesan kepada diri sendiri.'); setCreating(false); return; }
       const existing = threads.find((t) => t.user?.id === f.id);
       if (existing) { setActiveThread(existing.user); }
       else {
@@ -221,7 +317,7 @@ export default function ChatWidget({ open, onClose, onUnreadChange }) {
       }
       setShowCreate(false);
       setSearchUser('');
-    } catch { setSearchError('User tidak ditemukan.'); }
+    } catch { setSearchError('Pengguna tidak ditemukan.'); }
     finally { setCreating(false); }
   };
 
@@ -252,57 +348,134 @@ export default function ChatWidget({ open, onClose, onUnreadChange }) {
   };
 
   if (!open || !user) return null;
+  const mobileDetailOpen = showCreate || !!activeThread;
+  const shellClass = isMobile
+    ? 'chat-widget app-card fixed left-3 right-3 bottom-0 z-[80] flex rounded-t-3xl overflow-hidden shadow-2xl motion-sheet-up'
+    : 'chat-widget app-card fixed bottom-0 right-6 z-50 flex rounded-t-xl overflow-hidden shadow-2xl motion-sheet-up';
+  const shellStyle = isMobile
+    ? {
+        backgroundColor: 'var(--bg-card)',
+        border: '1px solid var(--border-color)',
+        borderBottom: 'none',
+        height: `${mobileHeight}px`,
+        maxHeight: `calc(100dvh - ${MOBILE_TOP_GAP}px)`,
+        maxWidth: '680px',
+        marginInline: 'auto',
+      }
+    : {
+        backgroundColor: 'var(--bg-card)',
+        border: '1px solid var(--border-color)',
+        borderBottom: 'none',
+        height: `${size?.height ?? minHeight}px`,
+        width: `${size?.width ?? minWidth}px`,
+      };
 
-  // Minimized state — just header bar
-  if (minimized) {
+  const closeChat = () => {
+    setMinimized(false);
+    if (isMobile) setMobileHeight(getDefaultMobileHeight());
+    onClose?.();
+  };
+
+  const minimizeChat = () => {
+    if (isMobile) {
+      setMinimized(false);
+      onClose?.();
+      return;
+    }
+    setMinimized(true);
+  };
+
+  // Status kecil hanya untuk desktop. Mobile kembali ke tombol Pesan di navigasi bawah.
+  if (minimized && !isMobile) {
     const totalUnread = threads.reduce((s, t) => s + (t.unread_count || 0), 0);
     return (
-      <div className="fixed bottom-0 right-6 z-50 w-72 rounded-t-xl overflow-hidden shadow-2xl" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', borderBottom: 'none' }}>
-        <div className="flex items-center justify-between px-3 h-10 cursor-pointer" onClick={() => setMinimized(false)} style={{ borderBottom: '1px solid var(--border-color)' }}>
-          <div className="flex items-center gap-2">
-            <div className="w-5 h-5 rounded-full flex items-center justify-center text-white text-[9px] font-bold" style={{ background: 'linear-gradient(135deg, #ff6b35, #f7931e)' }}>R</div>
-            <span className="font-semibold text-xs" style={{ color: 'var(--text-primary)' }}>Chats</span>
-            {totalUnread > 0 && <span className="text-[10px] font-bold text-orange-500">{totalUnread}</span>}
-          </div>
-          <div className="flex items-center gap-1">
-            <button onClick={(e) => { e.stopPropagation(); setMinimized(false); }} className="w-5 h-5 flex items-center justify-center" style={{ color: 'var(--text-muted)' }}>
-              <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" /></svg>
-            </button>
-            <button onClick={(e) => { e.stopPropagation(); onClose(); }} className="w-5 h-5 flex items-center justify-center" style={{ color: 'var(--text-muted)' }}>
-              <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-            </button>
-          </div>
-        </div>
+      <div className="fixed right-6 bottom-6 z-50 motion-pop">
+        <button
+          type="button"
+          onClick={() => setMinimized(false)}
+          className="relative flex h-14 w-14 items-center justify-center rounded-full text-white shadow-2xl transition-transform hover:scale-105 active:scale-95"
+          style={{ background: 'linear-gradient(135deg, #ff6b35, #f7931e)' }}
+          aria-label="Buka pesan"
+          title="Buka pesan"
+        >
+          <svg className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth={1.9} viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+          </svg>
+          {totalUnread > 0 && (
+            <span className="absolute -right-1 -top-1 flex min-h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white ring-2" style={{ '--tw-ring-color': 'var(--bg-primary)' }}>
+              {totalUnread > 99 ? '99+' : totalUnread}
+            </span>
+          )}
+        </button>
+        <button
+          type="button"
+          onClick={closeChat}
+          className="absolute -left-2 -top-2 flex h-7 w-7 items-center justify-center rounded-full shadow-lg transition-transform hover:scale-105 active:scale-95"
+          style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-muted)' }}
+          aria-label="Tutup pesan"
+          title="Tutup pesan"
+        >
+          <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
       </div>
     );
   }
 
   return (
     <>
-    <div className="fixed bottom-0 right-6 z-50 flex rounded-t-xl overflow-hidden shadow-2xl" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', borderBottom: 'none', height: `${size?.height ?? minHeight}px`, width: `${size?.width ?? minWidth}px` }}>
+    <div className={shellClass} style={shellStyle}>
+      {isMobile && (
+        <div
+          onPointerDown={startMobileResize}
+          className="absolute left-1/2 top-1.5 z-20 flex h-5 w-28 -translate-x-1/2 cursor-ns-resize touch-none items-center justify-center"
+          role="separator"
+          aria-orientation="horizontal"
+          aria-label="Tarik untuk mengatur tinggi pesan"
+          title="Tarik untuk mengatur tinggi pesan"
+        >
+          <span className="h-1 w-12 rounded-full" style={{ backgroundColor: 'var(--text-faint)' }} />
+        </div>
+      )}
       {/* Resize handle — pojok kiri atas, drag buat besarin */}
-      <div
-        onMouseDown={startResize}
-        className="absolute top-0 left-0 w-4 h-4 z-10"
-        style={{ cursor: 'nwse-resize' }}
-        title="Drag untuk mengubah ukuran"
-      >
-        <svg viewBox="0 0 16 16" className="w-full h-full" style={{ color: 'var(--text-faint)' }}>
-          <path d="M2 8 L8 2 M2 12 L12 2 M6 14 L14 6" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" />
-        </svg>
-      </div>
+      {!isMobile && (
+        <div
+          onMouseDown={startResize}
+          className="absolute top-0 left-0 w-4 h-4 z-10"
+          style={{ cursor: 'nwse-resize' }}
+          title="Tarik untuk mengubah ukuran"
+        >
+          <svg viewBox="0 0 16 16" className="w-full h-full" style={{ color: 'var(--text-faint)' }}>
+            <path d="M2 8 L8 2 M2 12 L12 2 M6 14 L14 6" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" />
+          </svg>
+        </div>
+      )}
       {/* Left — Threads */}
-      <div className="w-[300px] shrink-0 flex flex-col" style={{ borderRight: '1px solid var(--border-color)' }}>
+      <div
+        className={`${isMobile && mobileDetailOpen ? 'hidden' : 'flex'} ${isMobile ? 'w-full' : 'w-[300px]'} shrink-0 flex-col`}
+        style={{ borderRight: isMobile ? 'none' : '1px solid var(--border-color)' }}
+      >
         {/* Header */}
-        <div className="flex items-center justify-between px-3 h-10 shrink-0" style={{ borderBottom: '1px solid var(--border-color)' }}>
-          <div className="flex items-center gap-2">
-            <div className="w-5 h-5 rounded-full flex items-center justify-center text-white text-[9px] font-bold" style={{ background: 'linear-gradient(135deg, #ff6b35, #f7931e)' }}>R</div>
-            <span className="font-semibold text-xs" style={{ color: 'var(--text-primary)' }}>Chats</span>
+        <div className="flex items-center justify-between px-4 sm:px-3 h-12 sm:h-10 shrink-0" style={{ borderBottom: '1px solid var(--border-color)' }}>
+          <div className="flex items-baseline gap-2 min-w-0">
+            <span className="text-sm sm:text-xs font-black tracking-tight text-orange-500">Reddith</span>
+            <span className="text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>Pesan</span>
           </div>
           <div className="flex items-center gap-1">
-            <button onClick={() => { setShowCreate(true); setActiveThread(null); setSearchUser(''); setSearchError(''); }} className="w-6 h-6 rounded-full flex items-center justify-center" style={{ color: 'var(--text-muted)' }} title="New Chat">
+            <button onClick={() => { setShowCreate(true); setActiveThread(null); setSearchUser(''); setSearchError(''); }} className="w-6 h-6 rounded-full flex items-center justify-center" style={{ color: 'var(--text-muted)' }} title="Percakapan baru">
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
             </button>
+            {isMobile && (
+              <>
+                <button onClick={minimizeChat} className="w-8 h-8 rounded-full flex items-center justify-center" style={{ color: 'var(--text-muted)' }} title="Kecilkan pesan">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+                </button>
+                <button onClick={closeChat} className="w-8 h-8 rounded-full flex items-center justify-center" style={{ color: 'var(--text-muted)' }} title="Tutup">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </>
+            )}
           </div>
         </div>
 
@@ -311,7 +484,17 @@ export default function ChatWidget({ open, onClose, onUnreadChange }) {
           {loadingThreads ? (
             <div className="flex justify-center py-6"><div className="w-5 h-5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" /></div>
           ) : threads.length === 0 ? (
-            <div className="text-center py-6 px-3"><p className="text-xs" style={{ color: 'var(--text-muted)' }}>Belum ada percakapan</p></div>
+            <div className="flex min-h-[260px] sm:min-h-[55vh] flex-col items-center justify-center text-center py-10 px-6">
+              <div className="w-16 h-16 rounded-full flex items-center justify-center mb-3" style={{ background: 'linear-gradient(135deg, #ff6b35, #f7931e)' }}>
+                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" strokeWidth={1.6} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
+              </div>
+              <p className="text-sm font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>Belum ada percakapan</p>
+              <p className="text-xs mb-4 max-w-[220px]" style={{ color: 'var(--text-muted)' }}>Mulai percakapan baru dengan mencari nama pengguna.</p>
+              <button onClick={() => { setShowCreate(true); setActiveThread(null); setSearchUser(''); setSearchError(''); }} className="app-button-primary flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-full transition-colors">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
+                Percakapan baru
+              </button>
+            </div>
           ) : (
             threads.map((thread) => {
               const isActive = activeThread?.id === thread.user?.id;
@@ -338,7 +521,7 @@ export default function ChatWidget({ open, onClose, onUnreadChange }) {
                     </div>
                     <div className="flex items-center gap-1">
                       <p className="text-[11px] truncate flex-1" style={{ color: thread.unread_count > 0 ? 'var(--text-primary)' : 'var(--text-muted)', fontWeight: thread.unread_count > 0 ? 600 : 400 }}>
-                        {thread.last_message ? `${thread.last_message.sender_id === user.id ? 'You: ' : ''}${thread.last_message.body}` : 'Mulai percakapan...'}
+                        {thread.last_message ? `${thread.last_message.sender_id === user.id ? 'Kamu: ' : ''}${thread.last_message.body}` : 'Mulai percakapan...'}
                       </p>
                       {thread.unread_count > 0 && (
                         <span className="min-w-[16px] h-4 px-1 rounded-full bg-orange-500 text-white text-[9px] font-bold flex items-center justify-center shrink-0">
@@ -354,37 +537,36 @@ export default function ChatWidget({ open, onClose, onUnreadChange }) {
         </div>
       </div>
 
-      {/* Right — Conversation / Create / Welcome */}
-      {true && (
-        <div className="flex-1 flex flex-col min-w-0">
-          {/* Create Chat */}
+      {/* Kanan — percakapan / buat / sambutan */}
+        <div className={`${isMobile && !mobileDetailOpen ? 'hidden' : 'flex'} flex-1 flex-col min-w-0`}>
+          {/* Buat percakapan */}
           {showCreate && (
             <>
-              <div className="flex items-center justify-between px-3 h-10 shrink-0" style={{ borderBottom: '1px solid var(--border-color)' }}>
-                <span className="font-semibold text-xs" style={{ color: 'var(--text-primary)' }}>Create Chat</span>
+              <div className="flex items-center justify-between px-3 h-12 sm:h-10 shrink-0" style={{ borderBottom: '1px solid var(--border-color)' }}>
+                <span className="font-semibold text-sm sm:text-xs" style={{ color: 'var(--text-primary)' }}>Buat Percakapan</span>
                 <div className="flex items-center gap-1">
                   <button onClick={() => setShowCreate(false)} className="w-6 h-6 rounded-full flex items-center justify-center" style={{ color: 'var(--text-muted)' }} title="Batal">
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
                   </button>
-                  <button onClick={() => setMinimized(true)} className="w-6 h-6 rounded-full flex items-center justify-center" style={{ color: 'var(--text-muted)' }} title="Minimize">
+                  <button onClick={minimizeChat} className="w-6 h-6 rounded-full flex items-center justify-center" style={{ color: 'var(--text-muted)' }} title="Kecilkan">
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
                   </button>
-                  <button onClick={onClose} className="w-6 h-6 rounded-full flex items-center justify-center" style={{ color: 'var(--text-muted)' }} title="Close">
+                  <button onClick={closeChat} className="w-6 h-6 rounded-full flex items-center justify-center" style={{ color: 'var(--text-muted)' }} title="Tutup">
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
                   </button>
                 </div>
               </div>
               <div className="flex-1 p-3">
                 <form onSubmit={handleCreateChat}>
-                  <input type="text" value={searchUser} onChange={(e) => setSearchUser(e.target.value)} placeholder="Type username(s) *"
-                    className="w-full px-3 py-2.5 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-orange-400/50" style={inputStyle} autoFocus />
-                  <p className="text-[11px] mt-1.5" style={{ color: 'var(--text-muted)' }}>Search for people by username to chat with them.</p>
+                  <input type="text" value={searchUser} onChange={(e) => setSearchUser(e.target.value)} placeholder="Masukkan nama pengguna *"
+                    className="app-field w-full px-3 py-2.5 rounded-xl text-base sm:text-xs" style={inputStyle} autoFocus />
+                  <p className="text-[11px] mt-1.5" style={{ color: 'var(--text-muted)' }}>Cari pengguna berdasarkan nama pengguna untuk memulai percakapan.</p>
                   {searchError && <p className="text-[11px] mt-1 text-red-500">{searchError}</p>}
                 </form>
               </div>
               <div className="flex items-center justify-end gap-2 px-3 py-2" style={{ borderTop: '1px solid var(--border-color)' }}>
-                <button onClick={() => setShowCreate(false)} className="px-3 py-1 text-xs font-medium rounded-full" style={{ color: 'var(--text-secondary)' }}>Cancel</button>
-                <button onClick={handleCreateChat} disabled={creating || !searchUser.trim()} className="px-3 py-1 text-xs font-medium rounded-full bg-blue-500 text-white disabled:opacity-40">Create</button>
+                <button onClick={() => setShowCreate(false)} className="px-3 py-1 text-xs font-medium rounded-full" style={{ color: 'var(--text-secondary)' }}>Batal</button>
+                <button onClick={handleCreateChat} disabled={creating || !searchUser.trim()} className="app-button-primary px-3 py-1 text-xs font-semibold rounded-full disabled:opacity-40">Buat</button>
               </div>
             </>
           )}
@@ -392,12 +574,17 @@ export default function ChatWidget({ open, onClose, onUnreadChange }) {
           {/* Active conversation */}
           {!showCreate && activeThread && (
             <>
-              <div className="flex items-center justify-between px-3 h-10 shrink-0" style={{ borderBottom: '1px solid var(--border-color)' }}>
-                <div className="flex items-center gap-2">
+              <div className="flex items-center justify-between px-3 h-12 sm:h-10 shrink-0" style={{ borderBottom: '1px solid var(--border-color)' }}>
+                <div className="flex items-center gap-2 min-w-0">
+                  {isMobile && (
+                    <button onClick={() => { setActiveThread(null); setMessages([]); }} className="w-8 h-8 -ml-1 rounded-full flex items-center justify-center shrink-0" style={{ color: 'var(--text-muted)' }} title="Kembali">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+                    </button>
+                  )}
                   <Avatar url={activeThread.avatar_url} username={activeThread.username} size="xs" />
                   <Link
                     to={`/user/${activeThread.username}`}
-                    className="font-semibold text-xs hover:underline hover:text-orange-500"
+                    className="font-semibold text-sm sm:text-xs truncate hover:underline hover:text-orange-500"
                     style={{ color: 'var(--text-primary)' }}
                   >
                     {activeThread.username}
@@ -407,7 +594,7 @@ export default function ChatWidget({ open, onClose, onUnreadChange }) {
                   <button onClick={() => setConfirmDel({ kind: 'thread', user: activeThread })} className="w-6 h-6 rounded-full flex items-center justify-center" style={{ color: 'var(--text-muted)' }} title="Hapus percakapan">
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                   </button>
-                  <button onClick={() => setMinimized(true)} className="w-6 h-6 rounded-full flex items-center justify-center" style={{ color: 'var(--text-muted)' }} title="Minimize">
+                  <button onClick={minimizeChat} className="w-6 h-6 rounded-full flex items-center justify-center" style={{ color: 'var(--text-muted)' }} title="Kecilkan">
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
                   </button>
                   <button onClick={() => { setActiveThread(null); setMessages([]); }} className="w-6 h-6 rounded-full flex items-center justify-center" style={{ color: 'var(--text-muted)' }} title="Tutup percakapan">
@@ -461,7 +648,7 @@ export default function ChatWidget({ open, onClose, onUnreadChange }) {
                                     }}
                                   >
                                     <div className="font-semibold" style={{ color: isMine ? '#fff' : '#ff6b35' }}>
-                                      {msg.reply_to.sender_id === user.id ? 'You' : activeThread.username}
+                                      {msg.reply_to.sender_id === user.id ? 'Kamu' : activeThread.username}
                                     </div>
                                     <div className="truncate opacity-80">{msg.reply_to.body}</div>
                                   </div>
@@ -479,7 +666,7 @@ export default function ChatWidget({ open, onClose, onUnreadChange }) {
                               </div>
                               {hoveredMsg === msg.id && (
                                 <div className={`absolute top-1/2 -translate-y-1/2 flex flex-col gap-0.5 ${isMine ? 'right-full mr-1' : 'left-full ml-1'}`}>
-                                  <button onClick={() => setReplyTo({ id: msg.id, sender_id: msg.sender_id || msg.sender?.id, body: msg.body })} className="w-5 h-5 rounded flex items-center justify-center" style={{ color: 'var(--text-muted)' }} title="Reply">
+                                  <button onClick={() => setReplyTo({ id: msg.id, sender_id: msg.sender_id || msg.sender?.id, body: msg.body })} className="w-5 h-5 rounded flex items-center justify-center" style={{ color: 'var(--text-muted)' }} title="Balas">
                                     <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>
                                   </button>
                                   {isMine && (
@@ -503,20 +690,20 @@ export default function ChatWidget({ open, onClose, onUnreadChange }) {
                 {replyTo && (
                   <div className="flex items-center gap-2 px-3 py-1.5" style={{ backgroundColor: 'var(--bg-input)', borderBottom: '1px solid var(--border-color)' }}>
                     <div className="flex-1 min-w-0 px-2 py-1 rounded" style={{ borderLeft: '3px solid #ff6b35' }}>
-                      <div className="text-[10px] font-semibold text-orange-500">{replyTo.sender_id === user.id ? 'You' : activeThread.username}</div>
+                      <div className="text-[10px] font-semibold text-orange-500">{replyTo.sender_id === user.id ? 'Kamu' : activeThread.username}</div>
                       <div className="text-[11px] truncate" style={{ color: 'var(--text-secondary)' }}>{replyTo.body}</div>
                     </div>
-                    <button onClick={() => setReplyTo(null)} className="w-5 h-5 flex items-center justify-center" style={{ color: 'var(--text-muted)' }} title="Batal reply">
+                    <button onClick={() => setReplyTo(null)} className="w-5 h-5 flex items-center justify-center" style={{ color: 'var(--text-muted)' }} title="Batal balas">
                       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
                     </button>
                   </div>
                 )}
                 <form onSubmit={sendMessage} className="px-3 py-2">
                   <div className="flex items-center gap-2">
-                    <input type="text" value={msgInput} onChange={(e) => setMsgInput(e.target.value)} placeholder="Message"
-                      className="flex-1 px-3 py-2 rounded-full text-xs focus:outline-none focus:ring-2 focus:ring-orange-400/50" style={inputStyle} />
+                    <input type="text" value={msgInput} onChange={(e) => setMsgInput(e.target.value)} placeholder="Tulis pesan"
+                      className="app-field flex-1 px-3 py-2 rounded-full text-base sm:text-xs" style={inputStyle} />
                     <button type="submit" disabled={sending || !msgInput.trim()}
-                      className="w-7 h-7 rounded-full flex items-center justify-center bg-blue-500 text-white disabled:opacity-40 shrink-0">
+                      className="app-button-primary w-7 h-7 rounded-full flex items-center justify-center disabled:opacity-40 shrink-0">
                       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M12 5l7 7-7 7" /></svg>
                     </button>
                   </div>
@@ -530,10 +717,10 @@ export default function ChatWidget({ open, onClose, onUnreadChange }) {
             <div className="flex items-center justify-between px-3 h-10 shrink-0" style={{ borderBottom: '1px solid var(--border-color)' }}>
               <span className="font-semibold text-xs" style={{ color: 'var(--text-primary)' }}>Pesan</span>
               <div className="flex items-center gap-1">
-                <button onClick={() => setMinimized(true)} className="w-6 h-6 rounded-full flex items-center justify-center" style={{ color: 'var(--text-muted)' }} title="Minimize">
+                <button onClick={minimizeChat} className="w-6 h-6 rounded-full flex items-center justify-center" style={{ color: 'var(--text-muted)' }} title="Kecilkan">
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
                 </button>
-                <button onClick={onClose} className="w-6 h-6 rounded-full flex items-center justify-center" style={{ color: 'var(--text-muted)' }} title="Close">
+                <button onClick={closeChat} className="w-6 h-6 rounded-full flex items-center justify-center" style={{ color: 'var(--text-muted)' }} title="Tutup">
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
               </div>
@@ -544,22 +731,21 @@ export default function ChatWidget({ open, onClose, onUnreadChange }) {
               <div className="w-20 h-20 rounded-full flex items-center justify-center mb-3" style={{ background: 'linear-gradient(135deg, #ff6b35, #f7931e)' }}>
                 <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
               </div>
-              <p className="text-sm font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>Welcome to chat!</p>
-              <p className="text-[11px] mb-4 max-w-[220px]" style={{ color: 'var(--text-muted)' }}>Pilih percakapan dari daftar di kiri atau mulai chat baru.</p>
-              <button onClick={() => { setShowCreate(true); setSearchUser(''); setSearchError(''); }} className="flex items-center gap-1.5 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-xs font-medium rounded-full transition-colors">
+              <p className="text-sm font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>Selamat datang di pesan!</p>
+              <p className="text-[11px] mb-4 max-w-[220px]" style={{ color: 'var(--text-muted)' }}>Pilih percakapan dari daftar di kiri atau mulai percakapan baru.</p>
+              <button onClick={() => { setShowCreate(true); setSearchUser(''); setSearchError(''); }} className="app-button-primary flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-full transition-colors">
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
-                New chat
+                Percakapan baru
               </button>
             </div>
           )}
         </div>
-      )}
     </div>
 
     {/* Confirm delete modal — full-screen overlay */}
     {confirmDel && (
-      <div className="fixed inset-0 z-[100] flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(2px)' }} onClick={() => setConfirmDel(null)}>
-        <div onClick={(e) => e.stopPropagation()} className="rounded-xl shadow-2xl w-[300px] overflow-hidden" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
+      <div className="fixed inset-0 z-[100] flex items-center justify-center motion-overlay" style={{ backgroundColor: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(2px)' }} onClick={() => setConfirmDel(null)}>
+        <div onClick={(e) => e.stopPropagation()} className="rounded-xl shadow-2xl w-[300px] overflow-hidden motion-pop" style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
           <div className="px-4 pt-4 pb-3 text-center">
             <div className="w-10 h-10 mx-auto mb-2 rounded-full flex items-center justify-center" style={{ backgroundColor: 'rgba(239,68,68,0.12)' }}>
               <svg className="w-5 h-5 text-red-500" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
@@ -577,11 +763,11 @@ export default function ChatWidget({ open, onClose, onUnreadChange }) {
           </div>
           <div className="flex border-t" style={{ borderColor: 'var(--border-color)' }}>
             <button onClick={() => setConfirmDel(null)} className="flex-1 py-2.5 text-xs font-semibold transition-colors hover:bg-black/5" style={{ color: 'var(--text-secondary)' }}>
-              Cancel
+              Batal
             </button>
             <div className="w-px" style={{ backgroundColor: 'var(--border-color)' }} />
             <button onClick={runConfirm} className="flex-1 py-2.5 text-xs font-semibold text-red-500 transition-colors hover:bg-red-500/10">
-              Yes, delete
+              Ya, hapus
             </button>
           </div>
         </div>

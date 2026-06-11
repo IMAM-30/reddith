@@ -14,6 +14,7 @@ const Community = sequelize.define(
     slug: { type: DataTypes.STRING, allowNull: false, unique: true },
     description: { type: DataTypes.TEXT, allowNull: true },
     icon: { type: DataTypes.STRING, allowNull: true },
+    cover: { type: DataTypes.STRING, allowNull: true },
     visibility: { type: DataTypes.ENUM('public', 'private'), allowNull: false, defaultValue: 'public' },
     min_karma: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
   },
