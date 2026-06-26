@@ -65,6 +65,7 @@ router.delete('/communities/:slug/members/:userId', authRequired, community.kick
 
 // Posts
 router.post('/posts', authRequired, uploadPostImage, post.store);
+router.put('/posts/:id', authRequired, post.update);
 router.delete('/posts/:id', authRequired, post.destroy);
 
 // Comments

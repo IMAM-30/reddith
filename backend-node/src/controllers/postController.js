@@ -260,6 +260,60 @@ async function store(req, res) {
   }
 }
 
+async function update(req, res) {
+  try {
+    const post = await Post.findByPk(req.params.id);
+    if (!post) return res.status(404).json({ message: 'Post tidak ditemukan.' });
+
+    if (post.user_id !== req.user.id) {
+      return res.status(403).json({ message: 'Unauthorized.' });
+    }
+
+    const { title, body, community_id } = req.body;
+    if (title !== undefined && !String(title).trim()) {
+      return res.status(422).json({
+        message: 'The given data was invalid.',
+        errors: { title: ['Title required.'] },
+      });
+    }
+
+    let resolvedCommunityId = post.community_id || null;
+    if (community_id !== undefined) {
+      if (community_id === null || community_id === '') {
+        resolvedCommunityId = null;
+      } else {
+        const community = await Community.findByPk(community_id);
+        if (!community) {
+          return res.status(422).json({
+            message: 'The given data was invalid.',
+            errors: { community_id: ['Community tidak ditemukan.'] },
+          });
+        }
+        resolvedCommunityId = community.id;
+      }
+    }
+
+    await post.update({
+      title: title !== undefined ? title : post.title,
+      body: body !== undefined ? body : post.body,
+      community_id: resolvedCommunityId,
+    });
+
+    const full = await Post.findByPk(post.id, {
+      include: [
+        { model: User, as: 'user', attributes: ['id', 'name', 'username', 'avatar'] },
+        { model: Community, as: 'community', attributes: ['id', 'name', 'slug', 'icon'] },
+      ],
+    });
+
+    const result = await withCounts(full, req.user?.id || null);
+    return res.json(result);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: err.message });
+  }
+}
+
 async function destroy(req, res) {
   try {
     const post = await Post.findByPk(req.params.id);
@@ -277,4 +331,4 @@ async function destroy(req, res) {
   }
 }
 
-module.exports = { index, byCommunity, show, store, destroy, withCounts, batchEnrich };
+module.exports = { index, byCommunity, show, store, update, destroy, withCounts, batchEnrich };

@@ -4,11 +4,13 @@ node_modules/
 .env.*.local
 *.log
 .DS_Store
+coverage/
 
 # Uploaded user content — tidak ikut repo
 storage/avatars/*
 storage/posts/*
 storage/communities/*
+storage/covers/*
 !storage/avatars/.gitkeep
 !storage/posts/.gitkeep
 !storage/communities/.gitkeep
