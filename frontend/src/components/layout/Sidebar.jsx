@@ -29,9 +29,14 @@ export default function Sidebar() {
                 Semua Komunitas
               </Link>
               {user?.is_moderator && (
-                <Link to="/moderation/reports" className="flex items-center gap-2 rounded-xl px-3 py-2 font-medium hover:bg-orange-500/10 hover:text-orange-500" style={{ color: 'var(--text-secondary)' }}>
-                  Laporan Moderator
-                </Link>
+                <>
+                  <Link to="/moderation/admin" className="flex items-center gap-2 rounded-xl px-3 py-2 font-medium hover:bg-orange-500/10 hover:text-orange-500" style={{ color: 'var(--text-secondary)' }}>
+                    Panel Moderator
+                  </Link>
+                  <Link to="/moderation/reports" className="flex items-center gap-2 rounded-xl px-3 py-2 font-medium hover:bg-orange-500/10 hover:text-orange-500" style={{ color: 'var(--text-secondary)' }}>
+                    Laporan Moderator
+                  </Link>
+                </>
               )}
             </nav>
           </div>

@@ -14,6 +14,7 @@ const notification = require('../controllers/notificationController');
 const user = require('../controllers/userController');
 const search = require('../controllers/searchController');
 const report = require('../controllers/reportController');
+const moderationAdmin = require('../controllers/moderationAdminController');
 
 const uploadCommunityIcon = createUploader('communities').single('icon');
 const uploadCommunityMedia = createUploader('communities').fields([
@@ -91,6 +92,15 @@ router.post('/reports', authRequired, uploadReportEvidence, report.store);
 router.get('/moderation/reports', authRequired, report.index);
 router.patch('/moderation/reports/:id/dismiss', authRequired, report.dismiss);
 router.post('/moderation/reports/:id/delete-target', authRequired, report.deleteTarget);
+router.get('/moderation/admin/dashboard', authRequired, moderationAdmin.dashboard);
+router.get('/moderation/admin/users', authRequired, moderationAdmin.users);
+router.get('/moderation/admin/communities', authRequired, moderationAdmin.communities);
+router.get('/moderation/admin/posts', authRequired, moderationAdmin.posts);
+router.get('/moderation/admin/comments', authRequired, moderationAdmin.comments);
+router.delete('/moderation/admin/users/:id', authRequired, moderationAdmin.destroyUser);
+router.delete('/moderation/admin/communities/:id', authRequired, moderationAdmin.destroyCommunity);
+router.delete('/moderation/admin/posts/:id', authRequired, moderationAdmin.destroyPost);
+router.delete('/moderation/admin/comments/:id', authRequired, moderationAdmin.destroyComment);
 
 // Profile
 router.post('/update-avatar', authRequired, uploadAvatar, user.updateAvatar);

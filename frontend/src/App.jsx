@@ -26,6 +26,7 @@ const Popular = lazy(() => import('./pages/Popular'));
 const Rules = lazy(() => import('./pages/Rules'));
 const Guide = lazy(() => import('./pages/Guide'));
 const ModeratorReports = lazy(() => import('./pages/ModeratorReports'));
+const ModeratorAdmin = lazy(() => import('./pages/ModeratorAdmin'));
 
 function RouteFallback() {
   return (
@@ -70,6 +71,7 @@ export default function App() {
             <Route path="/create-post" element={<ProtectedRoute><Page><CreatePost /></Page></ProtectedRoute>} />
             {FEATURES.createCommunity && <Route path="/create-community" element={<ProtectedRoute><Page><CreateCommunity /></Page></ProtectedRoute>} />}
             {FEATURES.notifications && <Route path="/notifications" element={<ProtectedRoute><Page><Notifications /></Page></ProtectedRoute>} />}
+            <Route path="/moderation/admin" element={<ProtectedRoute><Page><ModeratorAdmin /></Page></ProtectedRoute>} />
             <Route path="/moderation/reports" element={<ProtectedRoute><Page><ModeratorReports /></Page></ProtectedRoute>} />
             <Route path="*" element={<Navigate to="/beranda" replace />} />
           </Route>
